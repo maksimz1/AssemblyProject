@@ -23,9 +23,9 @@ endm
 PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
-MOVE_DELAY = 200
-MIN_X = 1
-MIN_Y = 1
+MOVE_DELAY = 150
+MIN_X = 0
+MIN_Y = 0
 MAX_X = 63
 MAX_Y = 39
 macro PUSH_ALL_BP
@@ -159,8 +159,8 @@ endp
 proc PlayGame
 	
 	call CreateEnemy1
-	; call CreateEnemy2
-	; call CreateEnemy3
+	call CreateEnemy2
+	call CreateEnemy3
 
 	@@InputLoop:
 	push 1 
@@ -181,8 +181,8 @@ proc PlayGame
 	call DrawPlayer ; Draw the player in the updated position
 	
 	call MoveEnemy1
-	; call MoveEnemy2
-	; call MoveEnemy3
+	call MoveEnemy2
+	call MoveEnemy3
 
 	@@cont:
 	cmp [isExit], 1
@@ -235,19 +235,22 @@ proc ChangeDirection
 	cmp [playerDirection], 0 ; Prevent the player from reversing
 	je @@exit
 	mov [playerDirection], 2
-	
-	@@exit:
-	POP_ALL
-	ret
+	jmp @@exit
 	
 	@@stop_game:
 	mov [isExit], 1
 	jmp @@exit
+	
+	@@exit:
+	POP_ALL
+	ret
 endp
 
 ; ----------------------------------------------
 ; ---------------PLAYER FUNCTIONS---------------
 ; ----------------------------------------------
+
+
 
 ; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
 proc PlayerCheckLegalMove
@@ -766,24 +769,6 @@ proc EnemyChangeDirection
 	mov [byte bx], 3
 	jmp @@exit_func
 	
-	; add di, ENEMY_SPEED
-	; add si, ENEMY_SPEED
-	; cmp si, MAX_X
-	; jbe @@Legal
-	; jmp @@Illegal
-	; @@down_left:
-	; sub si, ENEMY_SPEED
-	; add di, ENEMY_SPEED
-	; cmp di, MAX_Y
-	; jbe @@Legal
-	; jmp @@Illegal
-	; @@up_left:
-	; sub di, ENEMY_SPEED
-	; sub si, ENEMY_SPEED
-	; cmp si, MIN_X
-	; jae @@Legal
-	; jmp @@Illegal
-	
 	@@exit_func:
 	POP_ALL_BP
 	ret 6
@@ -801,9 +786,9 @@ proc CheckUpRight
 	sub bx, ENEMY_SPEED
 	
 	cmp bx, MIN_Y
-	jb @@Illegal ; If passing upper boundary, change direction
+	jl @@Illegal ; If passing upper boundary, change direction
 	cmp ax, MAX_X
-	ja @@Illegal ; If passing right boundary, change direction
+	jg @@Illegal ; If passing right boundary, change direction
 	push ax
 	push bx
 	call CheckWallBit
@@ -833,10 +818,10 @@ proc CheckDownRight
 	add ax, ENEMY_SPEED
 	add bx, ENEMY_SPEED
 	
-	cmp bx, MIN_Y
-	jb @@Illegal ; If passing bottom boundary, change direction
+	cmp bx, MAX_Y
+	jg @@Illegal ; If passing bottom boundary, change direction
 	cmp ax, MAX_X
-	ja @@Illegal ; If passing right boundary, change direction
+	jg @@Illegal ; If passing right boundary, change direction
 	push ax
 	push bx
 	call CheckWallBit
@@ -867,9 +852,9 @@ proc CheckUpLeft
 	sub bx, ENEMY_SPEED
 	
 	cmp bx, MIN_Y
-	jb @@Illegal ; If passing upper boundary, change direction
+	jl @@Illegal ; If passing upper boundary, change direction
 	cmp ax, MIN_X
-	jb @@Illegal ; If passing left boundary, change direction
+	jl @@Illegal ; If passing left boundary, change direction
 	push ax
 	push bx
 	call CheckWallBit
@@ -899,9 +884,9 @@ proc CheckDownLeft
 	add bx, ENEMY_SPEED
 	
 	cmp bx, MAX_Y 
-	ja @@Illegal ; If passing bottom boundary, change direction
+	jg @@Illegal ; If passing bottom boundary, change direction
 	cmp ax, MIN_X
-	jb @@Illegal ; If passing left boundary, change direction
+	jl @@Illegal ; If passing left boundary, change direction
 	push ax
 	push bx
 	call CheckWallBit
