@@ -24,6 +24,10 @@ PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
 MOVE_DELAY = 200
+MIN_X = 1
+MIN_Y = 1
+MAX_X = 64
+MAX_Y = 40
 macro PUSH_ALL_BP
 	push bp
 	mov bp, sp
@@ -44,7 +48,7 @@ macro POP_ALL_BP
 	pop ax
 	pop bp
 endm
-
+	
 DATASEG
 
 grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
@@ -56,8 +60,8 @@ enemy_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ch)
 black_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup (0)
 matrix dw ?
 
-playerX dw 0 ; Player's Location relative to GRID
-playerY dw 0
+playerX dw 5 ; Player's Location relative to GRID
+playerY dw 5
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
 
 Enemy1X dw 0
@@ -153,10 +157,7 @@ endp
 proc PlayGame
 	
 	call CreateEnemy1
-	; call CreateEnemy2
-	; call CreateEnemy3
-	; call CreateEnemy4
-	
+
 	@@InputLoop:
 	push 1 
 	call LoopDelay ; Makes a delay for one milisecond
@@ -170,30 +171,28 @@ proc PlayGame
 	cmp dx, 0
 	jne @@cont ; If 200 Miliseconds haven't passed, keep counting
 	
-	mov ax, [timer] 
-	mov bx, 1000
-	xor dx, dx
-	div bx
-	cmp dx, 0
-	jne @@PrintTime
-	mov [second_counter], ax
-	@@PrintTime:
-	push 0
-	push 0
-	call MoveCursor
-	mov ax, 1000
-	push [second_counter] 
-	push 0ah
-	call PrintNumWithColor
+	; mov ax, [timer] 
+	; mov bx, 1000
+	; xor dx, dx
+	; div bx
+	; cmp dx, 0
+	; jne @@PrintTime
+	; mov [second_counter], ax
+	; @@PrintTime:
+	; push 0
+	; push 0
+	; call MoveCursor
+	; mov ax, 1000
+	; push [second_counter] 
+	; push 0ah
+	; call PrintNumWithColor
 	
 	call ErasePlayer ; Erase the outdated position of the Player
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
 	
 	call MoveEnemy1
-	; call MoveEnemy2
-	; call MoveEnemy3
-	; call MoveEnemy4
+
 	@@cont:
 	cmp [isExit], 1
 	je @@exitGame
@@ -259,6 +258,89 @@ endp
 ; ---------------PLAYER FUNCTIONS---------------
 ; ----------------------------------------------
 
+; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
+proc PlayerCheckLegalMove
+	cmp [playerDirection], 0
+	je @@up
+	cmp [playerDirection], 1
+	je @@right
+	cmp [playerDirection], 2
+	je @@down
+	cmp [playerDirection], 3
+	je @@left
+	
+	@@up:
+	mov ax, [playerY]
+	sub ax, PLAYER_SPEED
+	cmp ax, MIN_Y
+	jge @@Legal
+	jmp @@Illegal
+	
+	@@right:
+	mov ax, [playerX]
+	add ax, PLAYER_SPEED
+	cmp ax, MAX_X
+	jbe @@Legal
+	jmp @@Illegal
+
+	@@down:
+	mov ax, [playerY]
+	add ax, PLAYER_SPEED
+	cmp ax, MAX_Y
+	jle @@Legal
+	jmp @@Illegal
+
+	@@left:
+	mov ax, [playerX]
+	sub ax, PLAYER_SPEED
+	cmp ax, MIN_X
+	jge @@Legal
+	jmp @@Illegal
+	
+	@@Legal:
+	mov ax, 1
+	jmp @@exit_func
+	@@Illegal:
+	mov ax, 0
+	
+	@@exit_func:
+	ret
+endp
+	
+; Description: Disable a given bit in a given byte using NOT and AND logical operations
+; INPUT: BX - Offset of byte on grid, AL - Bit to disable
+proc DisableBit
+	not al
+	and al, [bx] 
+	mov [bx], al
+	ret
+endp 
+; Description: Enable a given bit in a given byte using OR logical operation
+; INPUT: BX - Offset of byte to, AL - Bit to Enable
+proc EnableBit
+	or al, [bx]
+	mov [bx], al
+	ret
+endp 
+
+; Description: Checks if a given bit in a given byte is enabled
+;			   Using AND operation between the two values and if
+;			   the operation result differs from 0, it is enabled
+; INPUT: BX - Offset of byte on grid, AL - Bit to Check
+; OUTPUT: AL - boolean(1 - Enabled, 0 - Disabled)
+proc CheckBit
+	and al, [bx]
+	cmp al, 0
+	jne @@Enabled
+	jmp @@exit_func
+	
+	@@Enabled:
+	mov al, 1
+	
+	@@exit_func:
+	ret
+endp
+
 ; Description: Function to calculate the offset of the player in the Grid
 ; INPUT: none
 ; OUTPUT: BX
@@ -272,11 +354,12 @@ endp
 
 proc UpdatePlayer
 	PUSH_ALL
+	call PlayerCheckLegalMove ; Checks if it is legal to move the player, boolean result in AX
+	cmp ax, 1
+	jne @@exit_func
 	call PlayerCoordsToGrid 
-	mov al, 1
-	not al
-	and al, [bx] 
-	mov [bx], al; Updates the player bit in the old byte to FALSE
+	mov al, 00000001b 
+	call DisableBit 
 	cmp [playerDirection], 0
 	je @@up
 	cmp [playerDirection], 1
@@ -288,24 +371,25 @@ proc UpdatePlayer
 	
 	@@up:
 	sub [playerY], PLAYER_SPEED
-	jmp @@exit_func
+	jmp @@UpdateGrid
 	
 	@@right:
 	add [playerX], PLAYER_SPEED
-	jmp @@exit_func
+	jmp @@UpdateGrid
 	
 	@@down:
 	add [playerY], PLAYER_SPEED
-	jmp @@exit_func
+	jmp @@UpdateGrid
 	
 	@@left:
 	sub [playerX], PLAYER_SPEED
-	jmp @@exit_func
+	
+	@@UpdateGrid:
+	call PlayerCoordsToGrid 
+	mov al, 00000001b 
+	call EnableBit
+	
 	@@exit_func:
-	call PlayerCoordsToGrid
-	mov al, 1
-	or al, [bx]
-	mov [bx], al ; Updates the player bit in the new byte to TRUE
 	POP_ALL
 	ret
 endp
@@ -356,8 +440,8 @@ mov bp , sp
 @@Self1:
 	  inc [timer]
       push cx
-    mov cx,3000
-@@Self2:
+    mov cx,3000	
+@@Self2:	
     loop @@Self2
     pop cx
     loop @@Self1
@@ -536,11 +620,76 @@ proc MoveCursor
 	ret 4
 endp
 
+; DESCRIPTION: Checks if the wall bit is enabled in 
+; 			   given grid cell, returns a boolean through AL
+; INPUT: SI - X, DI - Y
+; OUTPUT: AL - boolean(1 - Enabled, 0 - Disabled)
+proc CheckWallBit
+	push bx
+	push si
+	push di
+	call CoordinatesToGrid
+	pop bx
+	mov al, 00000100b
+	call CheckBit
+	pop bx
+	ret
+endp
+	
 
 ; ----------------------------------------------
 ; ---------------ENEMY FUNCTIONS----------------
 ; ----------------------------------------------
 
+; INPUT: SI - Enemy X, DI - Enemy Y, BX - EnemyDirection
+; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
+proc EnemyCheckLegalMove
+	cmp bx, 0
+	je @@up
+	cmp bx, 1
+	je @@right
+	cmp bx, 2
+	je @@down
+	cmp bx, 3
+	je @@left
+	
+	@@up_right:
+	add si, ENEMY_SPEED
+	sub di, ENEMY_SPEED
+	cmp di, MIN_Y
+	jge @@Legal
+	jmp @@Illegal
+	
+	@@down_right:
+	add di, ENEMY_SPEED
+	add si, ENEMY_SPEED
+	cmp si, MAX_X
+	jbe @@Legal
+	jmp @@Illegal
+
+	@@down_left:
+	sub si, ENEMY_SPEED
+	add di, ENEMY_SPEED
+	cmp di, MAX_Y
+	jle @@Legal
+	jmp @@Illegal
+
+	@@up_left:
+	sub di, ENEMY_SPEED
+	sub si, ENEMY_SPEED
+	cmp si, MIN_X
+	jge @@Legal
+	jmp @@Illegal
+	
+	@@Legal:
+	mov ax, 1
+	jmp @@exit_func
+	@@Illegal:
+	mov ax, 0
+	
+	@@exit_func:
+	ret
+endp
 	
 ; Generates random spawn location and direction for the enemy
 ; Uses the RandomByCS function
@@ -605,14 +754,14 @@ proc UpdateEnemy
 	mov di, EnemyX
 	mov si, EnemyY
 	
+	
+	
 	push [di]
 	push [si]
 	call CoordinatesToGrid ; Calculate the current/old Enemy offset on the Grid
 	pop bx ; returns the offset to bx
 	mov ax, [bp+4]
-	not al
-	and al, [bx]
-	mov [bx], al ; Updates the enemy bit in the old byte to FALSE
+	call DisableBit
 	cmp [word bp+6], 0
 	je @@up_right
 	cmp [word bp+6], 1
@@ -647,8 +796,7 @@ proc UpdateEnemy
 	call CoordinatesToGrid ; Calculate the current/old Enemy offset on the Grid
 	pop bx ; returns the offset to bx
 	mov ax, [bp+4]
-	or al, [bx] 
-	mov [bx], al ; Updates the enemy bit in the new byte to TRUE
+	call EnableBit
 	POP_ALL_BP
 	ret 8
 endp
@@ -702,7 +850,7 @@ proc EraseEnemy2
 	mov [matrix], cx
 	push [Enemy2X] ; Pass X for CoordinatesToVideo
 	push [Enemy2Y] ; Pass Y for CoordinatesToVideo
-	call CoordinatesToVideo
+	call CoordinatesToVideo 
 	pop di
 	mov cx, PLAYER_LENGTH
 	mov dx, PLAYER_LENGTH
