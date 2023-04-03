@@ -26,8 +26,8 @@ ENEMY_SPEED = 1
 MOVE_DELAY = 200
 MIN_X = 1
 MIN_Y = 1
-MAX_X = 64
-MAX_Y = 40
+MAX_X = 63
+MAX_Y = 39
 macro PUSH_ALL_BP
 	push bp
 	mov bp, sp
@@ -64,8 +64,8 @@ playerX dw 5 ; Player's Location relative to GRID
 playerY dw 5
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
 
-Enemy1X dw 0
-Enemy1Y dw 0
+Enemy1X dw 20
+Enemy1Y dw 2
 Enemy1Direction db 0
 
 Enemy2X dw 0
@@ -133,20 +133,22 @@ endp putMatrixInScreen
 ; push the Y
 ; result in stack
 ; Description: Function that calculates the needed Offset in video segment using the given coordinates
-
+; x=0..64
+; y=0..40
 proc CoordinatesToVideo
 	PUSH_ALL_BP
-	mov bx, 320*PLAYER_LENGTH
+	;mov bx, 64*PLAYER_LENGTH ;320
+	mov bx, 64*PLAYER_LENGTH*PLAYER_LENGTH
 	mov ax, [bp+4]
 	xor dx, dx
 	mul bx
 	xor dx, dx
-	push ax
+	push ax 
 	mov ax, [bp+6]
 	mov bx, PLAYER_LENGTH
-	mul bx
+	mul bx 
 	pop bx
-	add ax, bx
+	add ax, bx ; 64*5*Y + 5*X
 	mov [bp+6], ax
 	POP_ALL_BP
 	ret 2
@@ -157,6 +159,8 @@ endp
 proc PlayGame
 	
 	call CreateEnemy1
+	; call CreateEnemy2
+	; call CreateEnemy3
 
 	@@InputLoop:
 	push 1 
@@ -171,27 +175,14 @@ proc PlayGame
 	cmp dx, 0
 	jne @@cont ; If 200 Miliseconds haven't passed, keep counting
 	
-	; mov ax, [timer] 
-	; mov bx, 1000
-	; xor dx, dx
-	; div bx
-	; cmp dx, 0
-	; jne @@PrintTime
-	; mov [second_counter], ax
-	; @@PrintTime:
-	; push 0
-	; push 0
-	; call MoveCursor
-	; mov ax, 1000
-	; push [second_counter] 
-	; push 0ah
-	; call PrintNumWithColor
-	
+
 	call ErasePlayer ; Erase the outdated position of the Player
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
 	
 	call MoveEnemy1
+	; call MoveEnemy2
+	; call MoveEnemy3
 
 	@@cont:
 	cmp [isExit], 1
@@ -458,10 +449,10 @@ endp LoopDelay
 ; Description: Function that calculates the needed Offset in video segment using the given coordinates
 proc CoordinatesToGrid
 	PUSH_ALL_BP
-	mov bx, 200/PLAYER_LENGTH
+	mov bx, 64 ; 320/PLAYER_LENGTH
 	mov ax, [bp+4]
 	xor dx, dx
-	mul bx
+	mul bx ; 64 * Y
 	xor dx, dx
 	add ax, [bp+6]
 	mov [bp+6], ax
@@ -622,18 +613,20 @@ endp
 
 ; DESCRIPTION: Checks if the wall bit is enabled in 
 ; 			   given grid cell, returns a boolean through AL
-; INPUT: SI - X, DI - Y
-; OUTPUT: AL - boolean(1 - Enabled, 0 - Disabled)
+; INPUT: (X, Y) -> Through stack
+; OUTPUT: boolean (1 - Enabled, 0 - Disabled) -> Through stack
 proc CheckWallBit
-	push bx
-	push si
-	push di
+	PUSH_ALL_BP
+	push [bp+6]
+	push [bp+4]
 	call CoordinatesToGrid
 	pop bx
 	mov al, 00000100b
 	call CheckBit
-	pop bx
-	ret
+	xor ah, ah
+	mov [bp+6], ax
+	POP_ALL_BP
+	ret 2
 endp
 	
 
@@ -641,55 +634,292 @@ endp
 ; ---------------ENEMY FUNCTIONS----------------
 ; ----------------------------------------------
 
-; INPUT: SI - Enemy X, DI - Enemy Y, BX - EnemyDirection
-; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
-proc EnemyCheckLegalMove
-	cmp bx, 0
-	je @@up
-	cmp bx, 1
-	je @@right
-	cmp bx, 2
-	je @@down
-	cmp bx, 3
-	je @@left
+; INPUT: (Enemy X, Enemy Y, offset of EnemyDirection) -> Through Stack
+; OUTPUT: Change of value in EnemyDirection(if needed)
+proc EnemyChangeDirection
+	PUSH_ALL_BP
+	mov bx, [bp+4]
+	cmp [byte bx], 0
+	je @@jmp_up_right
+	cmp [byte bx], 1
+	je @@jmp_down_right
+	cmp [byte bx], 2
+	je @@jmp_down_left
+	cmp [byte bx], 3
+	je @@jmp_up_left
+	
+	@@jmp_up_right:
+	jmp @@up_right
+	@@jmp_down_right:
+	jmp @@down_right
+	@@jmp_down_left:
+	jmp @@down_left
+	@@jmp_up_left:
+	jmp @@up_left
+	@@jmp_exit_func:
+	jmp @@exit_func
 	
 	@@up_right:
-	add si, ENEMY_SPEED
-	sub di, ENEMY_SPEED
-	cmp di, MIN_Y
-	jge @@Legal
-	jmp @@Illegal
+	push [bp+8]
+	push [bp+6]
+	call CheckUpRight
+	pop ax
+	cmp ax, 1
+	je @@jmp_exit_func
+	push [bp+8]
+	push [bp+6]
+	call CheckDownRight
+	pop ax
+	cmp ax, 1
+	je @@jmp_set_down_right
+	push [bp+8]
+	push [bp+6]
+	call CheckUpLeft
+	pop ax
+	cmp ax, 1
+	je @@jmp_set_up_left
+	jmp @@set_down_left
 	
 	@@down_right:
-	add di, ENEMY_SPEED
-	add si, ENEMY_SPEED
-	cmp si, MAX_X
-	jbe @@Legal
-	jmp @@Illegal
-
-	@@down_left:
-	sub si, ENEMY_SPEED
-	add di, ENEMY_SPEED
-	cmp di, MAX_Y
-	jle @@Legal
-	jmp @@Illegal
-
-	@@up_left:
-	sub di, ENEMY_SPEED
-	sub si, ENEMY_SPEED
-	cmp si, MIN_X
-	jge @@Legal
-	jmp @@Illegal
+	push [bp+8]
+	push [bp+6]
+	call CheckDownRight
+	pop ax
+	cmp ax, 1
+	je @@jmp_exit_func
+	push [bp+8]
+	push [bp+6]
+	call CheckUpRight
+	pop ax
+	cmp ax, 1
+	je @@set_up_right
+	push [bp+8]
+	push [bp+6]
+	call CheckDownLeft
+	pop ax
+	cmp ax, 1
+	je @@set_down_left
+	jmp @@set_up_left
 	
-	@@Legal:
-	mov ax, 1
+	@@jmp_set_down_right:
+	jmp @@set_down_right
+	@@jmp_set_up_left:
+	jmp @@set_up_left
+	
+	
+	@@up_left:
+	push [bp+8]
+	push [bp+6]
+	call CheckUpLeft
+	pop ax
+	cmp ax, 1
+	je @@exit_func
+	push [bp+8]
+	push [bp+6]
+	call CheckDownLeft
+	pop ax
+	cmp ax, 1
+	je @@set_down_left
+	push [bp+8]
+	push [bp+6]
+	call CheckUpRight
+	pop ax
+	cmp ax, 1
+	je @@set_up_right
+	jmp @@set_down_right
+	
+	@@down_left:
+	push [bp+8]
+	push [bp+6]
+	call CheckDownLeft
+	pop ax
+	cmp ax, 1
+	je @@exit_func
+	push [bp+8]
+	push [bp+6]
+	call CheckUpLeft
+	pop ax
+	cmp ax, 1
+	je @@set_up_left
+	push [bp+8]
+	push [bp+6]
+	call CheckDownRight
+	pop ax
+	cmp ax, 1
+	je @@set_down_right
+	jmp @@set_up_right
+	
+	@@set_up_right:
+	mov bx, [bp+4]
+	mov [byte bx], 0
 	jmp @@exit_func
-	@@Illegal:
-	mov ax, 0
+	@@set_down_right:
+	mov bx, [bp+4]
+	mov [byte bx], 1
+	jmp @@exit_func
+	@@set_down_left:
+	mov bx, [bp+4]
+	mov [byte bx], 2
+	jmp @@exit_func
+	@@set_up_left:
+	mov bx, [bp+4]
+	mov [byte bx], 3
+	jmp @@exit_func
+	
+	; add di, ENEMY_SPEED
+	; add si, ENEMY_SPEED
+	; cmp si, MAX_X
+	; jbe @@Legal
+	; jmp @@Illegal
+	; @@down_left:
+	; sub si, ENEMY_SPEED
+	; add di, ENEMY_SPEED
+	; cmp di, MAX_Y
+	; jbe @@Legal
+	; jmp @@Illegal
+	; @@up_left:
+	; sub di, ENEMY_SPEED
+	; sub si, ENEMY_SPEED
+	; cmp si, MIN_X
+	; jae @@Legal
+	; jmp @@Illegal
 	
 	@@exit_func:
-	ret
+	POP_ALL_BP
+	ret 6
 endp
+
+; DESCRIPTION: SubFunction that checks if it is legal for the
+; 			   Enemy to move Up Right, result through stack
+; INPUT: (Enemy X, Enemy Y) -> Through stack
+; OUTPUT: boolean (1 - Legal, 0 - Illegal) -> Through Stack
+proc CheckUpRight
+	PUSH_ALL_BP
+	mov ax, [word bp+6]
+	mov bx, [word bp+4]
+	add ax, ENEMY_SPEED
+	sub bx, ENEMY_SPEED
+	
+	cmp bx, MIN_Y
+	jb @@Illegal ; If passing upper boundary, change direction
+	cmp ax, MAX_X
+	ja @@Illegal ; If passing right boundary, change direction
+	push ax
+	push bx
+	call CheckWallBit
+	pop ax
+	cmp ax, 0
+	je @@Legal
+	
+	@@Illegal:
+	mov [word bp+6], 0
+	jmp @@exit_func
+	@@Legal:
+	mov [word bp+6], 1
+	
+	@@exit_func:
+	POP_ALL_BP
+	ret 2
+endp
+
+; DESCRIPTION: SubFunction that checks if it is legal for the
+; 			   Enemy to move Down Right, result through stack
+; INPUT: (Enemy X, Enemy Y) -> Through stack
+; OUTPUT: boolean (1 - Legal, 0 - Illegal) -> Through Stack
+proc CheckDownRight
+	PUSH_ALL_BP
+	mov ax, [word bp+6]
+	mov bx, [word bp+4]
+	add ax, ENEMY_SPEED
+	add bx, ENEMY_SPEED
+	
+	cmp bx, MIN_Y
+	jb @@Illegal ; If passing bottom boundary, change direction
+	cmp ax, MAX_X
+	ja @@Illegal ; If passing right boundary, change direction
+	push ax
+	push bx
+	call CheckWallBit
+	pop ax
+	cmp ax, 0
+	je @@Legal
+	
+	@@Illegal:
+	mov [word bp+6], 0
+	jmp @@exit_func
+	@@Legal:
+	mov [word bp+6], 1
+	
+	@@exit_func:
+	POP_ALL_BP
+	ret 2
+endp
+
+; DESCRIPTION: SubFunction that checks if it is legal for the
+; 			   Enemy to move Up Left, result through stack
+; INPUT: (Enemy X, Enemy Y) -> Through stack
+; OUTPUT: boolean (1 - Legal, 0 - Illegal) -> Through Stack
+proc CheckUpLeft
+	PUSH_ALL_BP
+	mov ax, [word bp+6]
+	mov bx, [word bp+4]
+	sub ax, ENEMY_SPEED
+	sub bx, ENEMY_SPEED
+	
+	cmp bx, MIN_Y
+	jb @@Illegal ; If passing upper boundary, change direction
+	cmp ax, MIN_X
+	jb @@Illegal ; If passing left boundary, change direction
+	push ax
+	push bx
+	call CheckWallBit
+	pop ax
+	cmp ax, 0
+	je @@Legal
+	
+	@@Illegal:
+	mov [word bp+6], 0
+	jmp @@exit_func
+	@@Legal:
+	mov [word bp+6], 1
+	
+	@@exit_func:
+	POP_ALL_BP
+	ret 2
+endp
+; DESCRIPTION: SubFunction that checks if it is legal for the
+; 			   Enemy to move Down Left, result through stack
+; INPUT: (Enemy X, Enemy Y) -> Through stack
+; OUTPUT: boolean (1 - Legal, 0 - Illegal) -> Through Stack
+proc CheckDownLeft
+	PUSH_ALL_BP
+	mov ax, [word bp+6]
+	mov bx, [word bp+4]
+	sub ax, ENEMY_SPEED
+	add bx, ENEMY_SPEED
+	
+	cmp bx, MAX_Y 
+	ja @@Illegal ; If passing bottom boundary, change direction
+	cmp ax, MIN_X
+	jb @@Illegal ; If passing left boundary, change direction
+	push ax
+	push bx
+	call CheckWallBit
+	pop ax
+	cmp ax, 0
+	je @@Legal
+	
+	@@Illegal:
+	mov [word bp+6], 0
+	jmp @@exit_func
+	@@Legal:
+	mov [word bp+6], 1
+	
+	@@exit_func:
+	POP_ALL_BP
+	ret 2
+endp
+
 	
 ; Generates random spawn location and direction for the enemy
 ; Uses the RandomByCS function
@@ -701,7 +931,7 @@ proc GenerateEnemyLocation
 	EnemyX equ [bp+8]
 	
 	; Generate X
-	mov bl, 0
+	mov bl, 2
 	mov bh, 320/PLAYER_LENGTH
 	call RandomByCS
 	xor ah, ah
@@ -709,7 +939,7 @@ proc GenerateEnemyLocation
 	mov [bx], ax
 	
 	; Generate Y
-	mov bl, 0
+	mov bl, 2
 	mov bh, 200/PLAYER_LENGTH
 	call RandomByCS
 	xor ah, ah
@@ -746,15 +976,21 @@ proc DrawEnemy
 endp
 
 ; Description: Update the bit of the enemy in the grid, update enemy's location
-; Input: offset Enemy X ,offset Enemy Y, Enemy Direction, Enemy bit value(16, 32, 64, 128)
+; Input: offset Enemy X ,offset Enemy Y, offset Enemy Direction, Enemy bit value(16, 32, 64, 128)
 proc UpdateEnemy
 	PUSH_ALL_BP
 	EnemyX equ [bp+10]
 	EnemyY equ [bp+8]
+	EnemyDirection equ [bp+6]
+	
 	mov di, EnemyX
 	mov si, EnemyY
+	mov bx, EnemyDirection
 	
-	
+	push [di]
+	push [si]
+	push bx
+	call EnemyChangeDirection
 	
 	push [di]
 	push [si]
@@ -762,13 +998,15 @@ proc UpdateEnemy
 	pop bx ; returns the offset to bx
 	mov ax, [bp+4]
 	call DisableBit
-	cmp [word bp+6], 0
+	
+	mov bx, EnemyDirection
+	cmp [byte bx], 0
 	je @@up_right
-	cmp [word bp+6], 1
+	cmp [byte bx], 1
 	je @@down_right
-	cmp [word bp+6], 2
+	cmp [byte bx], 2
 	je @@down_left
-	cmp [word bp+6], 3
+	cmp [byte bx], 3
 	je @@up_left
 	
 	@@up_right:
@@ -802,15 +1040,11 @@ proc UpdateEnemy
 endp
 
 proc UpdateEnemy1
-	push bx
 	push offset Enemy1X
 	push offset Enemy1Y
-	mov bl, [Enemy1Direction]
-	xor bh, bh
-	push bx
+	push offset Enemy1Direction
 	push 16
 	call UpdateEnemy
-	pop bx
 	ret
 endp
 
@@ -834,9 +1068,7 @@ proc UpdateEnemy2
 	push bx
 	push offset Enemy2X
 	push offset Enemy2Y
-	mov bl, [Enemy2Direction]
-	xor bh, bh
-	push bx
+	push offset Enemy2Direction
 	push 32
 	call UpdateEnemy
 	pop bx
@@ -864,9 +1096,7 @@ proc UpdateEnemy3
 	push bx
 	push offset Enemy3X
 	push offset Enemy3Y
-	mov bl, [Enemy3Direction]
-	xor bh, bh
-	push bx
+	push offset Enemy3Direction
 	push 64
 	call UpdateEnemy
 	pop bx
@@ -893,9 +1123,7 @@ proc UpdateEnemy4
 	push bx
 	push offset Enemy4X
 	push offset Enemy4Y
-	mov bl, [Enemy4Direction]
-	xor bh, bh
-	push bx
+	push offset Enemy4Direction
 	push 128
 	call UpdateEnemy
 	pop bx
@@ -956,12 +1184,12 @@ endp
 
 proc CreateEnemy1
 	PUSH_ALL
-	push offset Enemy1X
-	push offset Enemy1Y
-	push offset Enemy1Direction
-	call GenerateEnemyLocation
+	; push offset Enemy1X
+	; push offset Enemy1Y
+	; push offset Enemy1Direction
+	; call GenerateEnemyLocation
 	
-	call UpdateEnemy1
+	; call UpdateEnemy1
 	
 	push [Enemy1X]
 	push [Enemy1Y]
