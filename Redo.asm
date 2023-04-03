@@ -51,11 +51,15 @@ endm
 	
 DATASEG
 
-grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
-
+; grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
+grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
+	 db 2 dup((320/PLAYER_LENGTH/8) dup(0), (320/PLAYER_LENGTH/8) dup(00000100b),(320/PLAYER_LENGTH/8)*6 dup(0))
+	 db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
+	 
 player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
 trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Bh)
 enemy_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ch)
+wall_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Dh)
 
 black_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup (0)
 matrix dw ?
@@ -97,8 +101,8 @@ exit:
 	mov ax, 4c00h
 	int 21h
 
-; in dx how many cols 
-; in cx how many rows
+; in dx how many cols (horizontal)
+; in cx how many rows (vertical)
 ; in matrix - the offset of what to copy
 ; in di start byte in screen (where to paste)
 
@@ -133,11 +137,8 @@ endp putMatrixInScreen
 ; push the Y
 ; result in stack
 ; Description: Function that calculates the needed Offset in video segment using the given coordinates
-; x=0..64
-; y=0..40
 proc CoordinatesToVideo
 	PUSH_ALL_BP
-	;mov bx, 64*PLAYER_LENGTH ;320
 	mov bx, 64*PLAYER_LENGTH*PLAYER_LENGTH
 	mov ax, [bp+4]
 	xor dx, dx
@@ -148,7 +149,7 @@ proc CoordinatesToVideo
 	mov bx, PLAYER_LENGTH
 	mul bx 
 	pop bx
-	add ax, bx ; 64*5*Y + 5*X
+	add ax, bx 
 	mov [bp+6], ax
 	POP_ALL_BP
 	ret 2
@@ -161,6 +162,7 @@ proc PlayGame
 	call CreateEnemy1
 	call CreateEnemy2
 	call CreateEnemy3
+	call DrawWalls
 
 	@@InputLoop:
 	push 1 
@@ -192,7 +194,46 @@ proc PlayGame
 	ret
 endp
 	
+proc DrawWall
+	PUSH_ALL_BP
+	lea cx, [wall_matrix]
+	mov [matrix], cx
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToVideo
+	pop di
+	mov cx, PLAYER_LENGTH
+	mov dx, PLAYER_LENGTH
+	call PutMatrixInScreen
+	POP_ALL_BP
+	ret 4
+endp
 
+proc DrawWalls
+	PUSH_ALL
+	mov cx,320/PLAYER_LENGTH-1 ; Holds the X
+	@@x_axis:
+	push cx 
+	mov di, cx
+	mov cx, 200/PLAYER_LENGTH-1 ; Holds the Y
+	@@y_axis:
+	push di ; Pass the X to the function
+	push cx ; Pass the Y to the function
+	call CheckWallBit
+	pop bx ; Get Function Output
+	cmp bx, 1
+	jne @@cont
+	@@draw_wall:
+	push di
+	push cx
+	call DrawWall
+	@@cont:
+	loop @@y_axis
+	pop cx 
+	loop @@x_axis
+	POP_ALL
+	ret
+endp
 proc ChangeDirection
 	PUSH_ALL
 	mov ah, 1
@@ -351,9 +392,6 @@ proc UpdatePlayer
 	call PlayerCheckLegalMove ; Checks if it is legal to move the player, boolean result in AX
 	cmp ax, 1
 	jne @@exit_func
-	call PlayerCoordsToGrid 
-	mov al, 00000001b 
-	call DisableBit 
 	cmp [playerDirection], 0
 	je @@up
 	cmp [playerDirection], 1
@@ -452,7 +490,7 @@ endp LoopDelay
 ; Description: Function that calculates the needed Offset in video segment using the given coordinates
 proc CoordinatesToGrid
 	PUSH_ALL_BP
-	mov bx, 64 ; 320/PLAYER_LENGTH
+	mov bx, 320/PLAYER_LENGTH
 	mov ax, [bp+4]
 	xor dx, dx
 	mul bx ; 64 * Y
@@ -916,16 +954,16 @@ proc GenerateEnemyLocation
 	EnemyX equ [bp+8]
 	
 	; Generate X
-	mov bl, 2
-	mov bh, 320/PLAYER_LENGTH
+	mov bl, 0
+	mov bh, 320/PLAYER_LENGTH-1
 	call RandomByCS
 	xor ah, ah
 	mov bx, EnemyX
 	mov [bx], ax
 	
 	; Generate Y
-	mov bl, 2
-	mov bh, 200/PLAYER_LENGTH
+	mov bl, 0
+	mov bh, 200/PLAYER_LENGTH-1
 	call RandomByCS
 	xor ah, ah
 	mov bx, EnemyY
@@ -943,7 +981,7 @@ proc GenerateEnemyLocation
 	ret 6
 endp
 
-; Description: Draws the given Enemy(since we have multiple) in the given coordinates 
+; Description: Draws an Enemy in the given coordinates 
 ; Input: Enemy X through stack, Enemy Y through stack
 proc DrawEnemy
 	PUSH_ALL_BP
@@ -1169,12 +1207,12 @@ endp
 
 proc CreateEnemy1
 	PUSH_ALL
-	; push offset Enemy1X
-	; push offset Enemy1Y
-	; push offset Enemy1Direction
-	; call GenerateEnemyLocation
+	push offset Enemy1X
+	push offset Enemy1Y
+	push offset Enemy1Direction
+	call GenerateEnemyLocation
 	
-	; call UpdateEnemy1
+	call UpdateEnemy1
 	
 	push [Enemy1X]
 	push [Enemy1Y]
