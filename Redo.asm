@@ -30,11 +30,11 @@ ENEMY4_BIT = 10000000b
 PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
-MOVE_DELAY = 150
+MOVE_DELAY = 100
 MIN_X = 0
 MIN_Y = 0
-MAX_X = 63
-MAX_Y = 39
+MAX_X = 320/PLAYER_LENGTH-1
+MAX_Y = 200/PLAYER_LENGTH-1
 macro PUSH_ALL_BP
 	push bp
 	mov bp, sp
@@ -63,17 +63,19 @@ grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
 	 db 2 dup((320/PLAYER_LENGTH/8) dup(0), (320/PLAYER_LENGTH/8) dup(00000100b),(320/PLAYER_LENGTH/8)*6 dup(0))
 	 db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
 	 
-player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
-trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Bh)
+player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(09h)
+trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
 enemy_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ch)
-wall_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Dh)
+wall_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(02h)
 
 black_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup (0)
 matrix dw ?
 
-playerX dw 5 ; Player's Location relative to GRID
-playerY dw 5
+playerX dw 8 ; Player's Location relative to GRID
+playerY dw 20
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
+
+IsDrawingTrail db 0
 
 Enemy1X dw 20
 Enemy1Y dw 2
@@ -182,10 +184,15 @@ proc PlayGame
 	xor dx, dx
 	div bx
 	cmp dx, 0
-	jne @@cont ; If 200 Miliseconds haven't passed, keep counting
+	jne @@cont1 ; If 200 Miliseconds haven't passed, keep counting
 	
 
 	; call ErasePlayer ; Erase the outdated position of the Player
+	call AddTrail
+	cmp ax, 1
+	jne @@cont
+	call FillArea
+	@@cont:
 	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
@@ -194,7 +201,7 @@ proc PlayGame
 	call MoveEnemy2
 	call MoveEnemy3
 
-	@@cont:
+	@@cont1:
 	cmp [isExit], 1
 	je @@exitGame
 	jmp @@InputLoop
@@ -245,6 +252,44 @@ proc DrawWalls
 	POP_ALL
 	ret
 endp
+
+; DESCRIPTION: Function To Add Trail piece to the current cell
+;			   and returns a value to tell us if we should add New Area
+; INPUT: None
+; OUTPUT: Boolean(1-Add New Area, 0-Dont Add) -> AX
+proc AddTrail
+	push [playerX]
+	push [playerY]
+	call CheckWallBit
+	pop ax
+	cmp ax, 1
+	je @@NoAddTrail
+	jmp @@YesAddTrail
+	
+	@@NoAddTrail:
+	cmp [IsDrawingTrail], 1
+	jne @@NoAddTrail2
+	
+	@@NoAddTrail1:
+	mov [IsDrawingTrail], 0
+	mov ax, 1
+	jmp @@exit_func
+	
+	@@NoAddTrail2:
+	mov ax, 0
+	jmp @@exit_func
+	
+	@@YesAddTrail:
+	call PlayerCoordsToGrid 
+	mov al, TRAIL_BIT 
+	call EnableBit
+	mov [IsDrawingTrail], 1
+	mov ax, 0
+	
+	@@exit_func:
+	ret
+endp
+
 proc ChangeDirection
 	PUSH_ALL
 	mov ah, 1
@@ -302,6 +347,11 @@ endp
 ; ---------------PLAYER FUNCTIONS---------------
 ; ----------------------------------------------
 
+; DESCRIPTION: Function that fills the area between the trail
+;			   And the captured area, does so by iterating through 
+;			   rows and counting the segments that are surounded by the
+;			   trail and the captured area
+proc FillArea
 
 
 ; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
@@ -356,6 +406,7 @@ endp
 ; Description: Disable a given bit in a given byte using NOT and AND logical operations
 ; INPUT: BX - Offset of byte on grid, AL - Bit to disable
 proc DisableBit
+
 	not al
 	and al, [bx] 
 	mov [bx], al
@@ -429,7 +480,7 @@ proc UpdatePlayer
 	
 	@@UpdateGrid:
 	call PlayerCoordsToGrid 
-	mov al, 00000001b 
+	mov al, PLAYER_BIT 
 	call EnableBit
 	
 	@@exit_func:
@@ -680,7 +731,7 @@ proc MoveCursor
 endp
 
 ; DESCRIPTION: Checks if the wall bit is enabled in 
-; 			   given grid cell, returns a boolean through AL
+; 			   given grid cell, returns a boolean through stack
 ; INPUT: (X, Y) -> Through stack
 ; OUTPUT: boolean (1 - Enabled, 0 - Disabled) -> Through stack
 proc CheckWallBit
@@ -715,6 +766,7 @@ proc CheckTrailBit
 	POP_ALL_BP
 	ret 2
 endp
+
 
 ; DESCRIPTION: Fills up the cell in which the player used to be
 			 ; according to bits that are enabled in the cell
