@@ -351,7 +351,55 @@ endp
 ;			   And the captured area, does so by iterating through 
 ;			   rows and counting the segments that are surounded by the
 ;			   trail and the captured area
+proc Check_FillArea
+	PUSH_ALL
+	mov si, -1 ; Stores first X of the trail/wall
+	mov di, -1 ; Stores last X of the trail/Wall
+	mov cx, MAX_Y
+	@@OuterLoop:
+	push cx
+	mov bx, cx
+	mov cx, MAX_X
+	@@Row:
+	push cx ; Current X to test
+	push bx ; Current Y to test
+	call CheckTrailBit
+	pop ax
+	cmp ax, 1
+	je @@checkFound
+	push cx ; Current X to test
+	push bx ; Current Y to test
+	call CheckWallBitBit
+	pop ax
+	cmp ax, 1 ; Check if current cell is a wall
+	@@checkFound:
+	cmp si, -1
+	je @@setSI
+	cmp di, -1
+	jne @@FillNewArea
+	@@setDI:
+	mov di, cx
+	jmp @@FillNewArea
+	@@setSI:
+	mov si, cx
+	@@FillNewArea:
+	push si
+	push di
+	push bx
+	@@cont:
+	loop @@Row
+	mov si, -1
+	mov di, -1
+	pop cx
+	loop @@OuterLoop
+	PUSH_ALL
+	ret
+endp
+
 proc FillArea
+	
+	
+	
 
 
 ; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
