@@ -19,7 +19,14 @@ macro POP_ALL
 	pop bx
 	pop ax
 endm
-
+; --------- 
+PLAYER_BIT = 00000001b
+TRAIL_BIT = 00000010b
+WALL_BIT = 00000100b
+ENEMY1_BIT = 00010000b
+ENEMY2_BIT = 00100000b
+ENEMY3_BIT = 01000000b
+ENEMY4_BIT = 10000000b
 PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
@@ -178,7 +185,8 @@ proc PlayGame
 	jne @@cont ; If 200 Miliseconds haven't passed, keep counting
 	
 
-	call ErasePlayer ; Erase the outdated position of the Player
+	; call ErasePlayer ; Erase the outdated position of the Player
+	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
 	
@@ -194,6 +202,9 @@ proc PlayGame
 	ret
 endp
 	
+; DESCRIPTION: Draws the wall matrix using PutMatrixInScreen
+; INPUT: (X, Y) -> Through Stack
+; OUTPUT: Draws wall to screen at given coordinates 
 proc DrawWall
 	PUSH_ALL_BP
 	lea cx, [wall_matrix]
@@ -458,7 +469,23 @@ proc DrawPlayer
 	ret
 endp
 	
-
+; DESCRIPTION: Draws the trail matrix using PutMatrixInScreen
+; INPUT: (X, Y) -> Through Stack
+; OUTPUT: Draws trail to screen at given coordinates 
+proc DrawTrail
+	PUSH_ALL_BP
+	lea cx, [trail_matrix]
+	mov [matrix], cx
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToVideo
+	pop di
+	mov cx, PLAYER_LENGTH
+	mov dx, PLAYER_LENGTH
+	call PutMatrixInScreen
+	POP_ALL_BP
+	ret 4
+endp
 
 ; Delays the program for the passed amount of time
 ; Usage: Pass by value the amount of MILISECONDS
@@ -662,15 +689,73 @@ proc CheckWallBit
 	push [bp+4]
 	call CoordinatesToGrid
 	pop bx
-	mov al, 00000100b
+	mov al, WALL_BIT
 	call CheckBit
 	xor ah, ah
 	mov [bp+6], ax
 	POP_ALL_BP
 	ret 2
 endp
-	
 
+
+; DESCRIPTION: Checks if the trail bit is enabled in 
+; 			   given grid cell, returns a boolean through stack
+; INPUT: (X, Y) -> Through stack
+; OUTPUT: boolean (1 - Enabled, 0 - Disabled) -> Through stack
+proc CheckTrailBit
+	PUSH_ALL_BP
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToGrid
+	pop bx
+	mov al, TRAIL_BIT
+	call CheckBit
+	xor ah, ah
+	mov [bp+6], ax
+	POP_ALL_BP
+	ret 2
+endp
+
+; DESCRIPTION: Fills up the cell in which the player used to be
+			 ; according to bits that are enabled in the cell
+; INPUT: None
+; OUTPUT: Draws cell to the screen
+proc RefreshCell
+	PUSH_ALL
+	push [playerX]
+	push [playerY]
+	call CheckWallBit
+	pop ax
+	cmp ax, 1
+	je @@draw_wall
+	
+	push [playerX]
+	push [playerY]
+	call CheckTrailBit
+	pop ax
+	cmp ax, 1
+	je @@draw_trail
+	jmp @@draw_black
+
+	@@draw_wall:
+	push [playerX]
+	push [playerY]
+	call DrawWall
+	jmp @@exit_func
+	
+	@@draw_trail:
+	push [playerX]
+	push [playerY]
+	call DrawTrail
+	jmp @@exit_func
+
+	@@draw_black:
+	call ErasePlayer
+	
+	@@exit_func:
+	POP_ALL
+	ret 
+endp
 ; ----------------------------------------------
 ; ---------------ENEMY FUNCTIONS----------------
 ; ----------------------------------------------
@@ -1066,7 +1151,7 @@ proc UpdateEnemy1
 	push offset Enemy1X
 	push offset Enemy1Y
 	push offset Enemy1Direction
-	push 16
+	push ENEMY1_BIT
 	call UpdateEnemy
 	ret
 endp
@@ -1092,7 +1177,7 @@ proc UpdateEnemy2
 	push offset Enemy2X
 	push offset Enemy2Y
 	push offset Enemy2Direction
-	push 32
+	push ENEMY2_BIT
 	call UpdateEnemy
 	pop bx
 	ret
@@ -1120,7 +1205,7 @@ proc UpdateEnemy3
 	push offset Enemy3X
 	push offset Enemy3Y
 	push offset Enemy3Direction
-	push 64
+	push ENEMY3_BIT
 	call UpdateEnemy
 	pop bx
 	ret
@@ -1147,7 +1232,7 @@ proc UpdateEnemy4
 	push offset Enemy4X
 	push offset Enemy4Y
 	push offset Enemy4Direction
-	push 128
+	push ENEMY4_BIT
 	call UpdateEnemy
 	pop bx
 	ret
