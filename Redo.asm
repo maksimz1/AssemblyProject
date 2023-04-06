@@ -1,6 +1,6 @@
 IDEAL
 MODEL small
-STACK 5000h
+STACK 4000h
 
 macro PUSH_ALL
 	push ax
@@ -60,9 +60,6 @@ endm
 DATASEG
 
 grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
-; grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
-	 ; db 2 dup((320/PLAYER_LENGTH/8) dup(0), (320/PLAYER_LENGTH/8) dup(00000100b),(320/PLAYER_LENGTH/8)*6 dup(0))
-	 ; db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
 	 
 player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(09h)
 trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
@@ -180,7 +177,7 @@ proc PlayGame
 
 	@@InputLoop:
 	push 1
-	call LoopDelay ; Makes a delay for one milisecond
+	call TimeBasedDelay ; Makes a delay for one milisecond
 	call ChangeDirection ; Takes input and changes direction accordingly
 	
 	; Makes the delay for updating and drawing the game Objects
@@ -198,6 +195,8 @@ proc PlayGame
 	jne @@cont
 	call AddArea
 	@@cont:
+	push [playerX]
+	push [playerY]
 	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
@@ -267,6 +266,31 @@ proc DrawWalls
 	
 	POP_ALL
 	ret
+endp
+
+; DESCRIPTION: Redraws all of the elements on the screen 
+; We will use this command after capturing new area to update the captured area on the screen
+proc RefreshScreen
+	PUSH_ALL_BP
+	mov cx, MAX_X
+	mov di, 0
+	@@outer_loop:
+	push cx
+	mov cx, MAX_Y
+	mov si, 0
+	@@inner_loop:
+	push di
+	push si
+	call RefreshCell
+	
+	@@cont:
+	inc si
+	loop @@inner_loop
+	pop cx
+	inc di
+	loop @@outer_loop
+	POP_ALL_BP
+	ret 4
 endp
 
 proc CreateWalls
@@ -392,6 +416,7 @@ endp
 ; ----------------------------------------------
 	
 proc AddArea
+	PUSH_ALL
 	mov cx, 2559
 	@@FindTrails:
 	mov bx, cx
@@ -409,24 +434,50 @@ proc AddArea
 	push 0
 	push 0
 	call MarkOuterBit
-	mov cx, 2559
-	@@FillWithWalls:
-	mov bx, cx
+	push 63
+	push 0
+	call MarkOuterBit
+	push 63
+	push 39
+	call MarkOuterBit
+	push 0
+	push 39
+	call MarkOuterBit
+	mov cx, MAX_X
+	mov di, 0
+	@@outer_loop:
+	push cx
+	mov cx, MAX_Y
+	mov si, 0
+	@@inner_loop:
+	push di
+	push si
+	call CoordinatesToGrid
+	pop bx
 	mov al, OUTER_BIT
 	call CheckBit
 	cmp al, 1
-	je @@cont2
-	mov bx, cx
-	mov al, WALL_BIT
-	call CheckBit
-	cmp al, 1
-	je @@cont2
+	je @@ClearMark
 	
-	mov bx, cx
+	@@SetWall:
 	mov al, WALL_BIT
 	call EnableBit
-	@@cont2:
-	loop @@FillWithWalls
+	push di
+	push si
+	call DrawWall
+	jmp @@cont
+	
+	@@ClearMark:
+	mov al, OUTER_BIT
+	call DisableBit
+	
+	@@cont:
+	inc si
+	loop @@inner_loop
+	pop cx
+	inc di
+	loop @@outer_loop
+	POP_ALL
 	ret
 endp
 	
@@ -435,7 +486,6 @@ endp
 proc MarkOuterBit
 	push bp
 	mov bp, sp
-	
 	
 	push [bp+6]
 	push [bp+4]
@@ -454,12 +504,6 @@ proc MarkOuterBit
 	push [bp+4]
 	call CoordinatesToVideo
 	pop di
-	
-	; lea cx, [outer_matrix]
-	; mov [matrix], cx
-	; mov dx, PLAYER_LENGTH
-	; mov cx, PLAYER_LENGTH
-	; call putMatrixInScreen
 	
 	push [bp+6]
 	push [bp+4]
@@ -480,7 +524,6 @@ proc MarkOuterBit
 	push ax
 	push [bp+4]
 	call  MarkOuterBit
-	; jmp @@xPlus1
 	
 	@@yPlus1:
 	mov ax, [bp+4]
@@ -490,7 +533,6 @@ proc MarkOuterBit
 	push [bp+6]
 	push ax
 	call  MarkOuterBit
-	; jmp @@yPlus1
 	
 	@@xMinus1:
 	mov ax, [bp+6]
@@ -500,7 +542,6 @@ proc MarkOuterBit
 	push ax
 	push [bp+4]
 	call  MarkOuterBit
-	; jmp @@xMinus1
 	
 	@@yMinus1:
 	mov ax, [bp+4]
@@ -983,9 +1024,9 @@ endp
 ; INPUT: None
 ; OUTPUT: Draws cell to the screen
 proc RefreshCell
-	PUSH_ALL
-	push [playerX]
-	push [playerY]
+	PUSH_ALL_BP
+	push [bp+6]
+	push [bp+4]
 	call CheckWallBit
 	pop ax
 	cmp ax, 1
@@ -1000,14 +1041,14 @@ proc RefreshCell
 	jmp @@draw_black
 
 	@@draw_wall:
-	push [playerX]
-	push [playerY]
+	push [bp+6]
+	push [bp+4]
 	call DrawWall
 	jmp @@exit_func
 	
 	@@draw_trail:
-	push [playerX]
-	push [playerY]
+	push [bp+6]
+	push [bp+4]
 	call DrawTrail
 	jmp @@exit_func
 
@@ -1015,7 +1056,7 @@ proc RefreshCell
 	call ErasePlayer
 	
 	@@exit_func:
-	POP_ALL
+	POP_ALL_BP
 	ret 
 endp
 ; ----------------------------------------------
