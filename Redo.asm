@@ -1,6 +1,6 @@
 IDEAL
 MODEL small
-STACK 100h
+STACK 5000h
 
 macro PUSH_ALL
 	push ax
@@ -23,6 +23,7 @@ endm
 PLAYER_BIT = 00000001b
 TRAIL_BIT = 00000010b
 WALL_BIT = 00000100b
+OUTER_BIT = 00001000b
 ENEMY1_BIT = 00010000b
 ENEMY2_BIT = 00100000b
 ENEMY3_BIT = 01000000b
@@ -58,22 +59,23 @@ endm
 	
 DATASEG
 
-; grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
-grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
-	 db 2 dup((320/PLAYER_LENGTH/8) dup(0), (320/PLAYER_LENGTH/8) dup(00000100b),(320/PLAYER_LENGTH/8)*6 dup(0))
-	 db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
+grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
+; grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
+	 ; db 2 dup((320/PLAYER_LENGTH/8) dup(0), (320/PLAYER_LENGTH/8) dup(00000100b),(320/PLAYER_LENGTH/8)*6 dup(0))
+	 ; db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH/2-1) dup(0)
 	 
 player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(09h)
 trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
 enemy_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ch)
 wall_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(02h)
-
+outer_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Dh)
 black_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup (0)
 matrix dw ?
 
-playerX dw 8 ; Player's Location relative to GRID
-playerY dw 20
+playerX dw 5 ; Player's Location relative to GRID
+playerY dw 5
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
+oldPlayerDirection db 0 ; previous Direction of movement
 
 IsDrawingTrail db 0
 
@@ -171,10 +173,13 @@ proc PlayGame
 	call CreateEnemy1
 	call CreateEnemy2
 	call CreateEnemy3
+	push [playerX]
+	push [playerY]
+	call CreateWalls
 	call DrawWalls
 
 	@@InputLoop:
-	push 1 
+	push 1
 	call LoopDelay ; Makes a delay for one milisecond
 	call ChangeDirection ; Takes input and changes direction accordingly
 	
@@ -184,14 +189,14 @@ proc PlayGame
 	xor dx, dx
 	div bx
 	cmp dx, 0
-	jne @@cont1 ; If 200 Miliseconds haven't passed, keep counting
+	jne @@cont1 ; If 100 Miliseconds haven't passed, keep counting
 	
 
 	; call ErasePlayer ; Erase the outdated position of the Player
 	call AddTrail
-	cmp ax, 1
+	cmp ax, 1 ; Checks if we captured new area
 	jne @@cont
-	call FillArea
+	call AddArea
 	@@cont:
 	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
@@ -229,28 +234,67 @@ endp
 
 proc DrawWalls
 	PUSH_ALL
-	mov cx,320/PLAYER_LENGTH-1 ; Holds the X
-	@@x_axis:
-	push cx 
-	mov di, cx
-	mov cx, 200/PLAYER_LENGTH-1 ; Holds the Y
-	@@y_axis:
-	push di ; Pass the X to the function
-	push cx ; Pass the Y to the function
+	
+	mov cx, MAX_X
+	mov di, 0
+	@@outer_loop:
+	push cx
+	mov cx, MAX_Y
+	mov si, 0
+	@@inner_loop:
+	push di
+	push si
 	call CheckWallBit
-	pop bx ; Get Function Output
-	cmp bx, 1
-	jne @@cont
+	pop ax
+	cmp ax, 1
+	jne @@draw_black
+
 	@@draw_wall:
 	push di
-	push cx
+	push si
 	call DrawWall
+	jmp @@cont
+	
+
+	@@draw_black:
+	call ErasePlayer
 	@@cont:
-	loop @@y_axis
-	pop cx 
-	loop @@x_axis
+	inc si
+	loop @@inner_loop
+	pop cx
+	inc di
+	loop @@outer_loop
+	
 	POP_ALL
 	ret
+endp
+
+proc CreateWalls
+	PUSH_ALL_BP
+	mov cx, 3
+	mov di, 0
+	@@outer_loop:
+	push cx
+	mov si,0 
+	mov cx, 3
+	@@inner_loop:
+	mov ax, [bp+6]
+	add ax, si
+	mov bx, [bp+4]
+	add bx, di
+	push ax
+	push bx
+	call CoordinatesToGrid
+	pop bx
+	mov al, WALL_BIT
+	call EnableBit
+	inc si
+	loop @@inner_loop
+	pop cx
+	inc di
+	loop @@outer_loop
+	POP_ALL_BP
+	ret 4
 endp
 
 ; DESCRIPTION: Function To Add Trail piece to the current cell
@@ -346,59 +390,132 @@ endp
 ; ----------------------------------------------
 ; ---------------PLAYER FUNCTIONS---------------
 ; ----------------------------------------------
-
-; DESCRIPTION: Function that fills the area between the trail
-;			   And the captured area, does so by iterating through 
-;			   rows and counting the segments that are surounded by the
-;			   trail and the captured area
-proc Check_FillArea
-	PUSH_ALL
-	mov si, -1 ; Stores first X of the trail/wall
-	mov di, -1 ; Stores last X of the trail/Wall
-	mov cx, MAX_Y
-	@@OuterLoop:
-	push cx
+	
+proc AddArea
+	mov cx, 2559
+	@@FindTrails:
 	mov bx, cx
-	mov cx, MAX_X
-	@@Row:
-	push cx ; Current X to test
-	push bx ; Current Y to test
-	call CheckTrailBit
-	pop ax
-	cmp ax, 1
-	je @@checkFound
-	push cx ; Current X to test
-	push bx ; Current Y to test
-	call CheckWallBitBit
-	pop ax
-	cmp ax, 1 ; Check if current cell is a wall
-	@@checkFound:
-	cmp si, -1
-	je @@setSI
-	cmp di, -1
-	jne @@FillNewArea
-	@@setDI:
-	mov di, cx
-	jmp @@FillNewArea
-	@@setSI:
-	mov si, cx
-	@@FillNewArea:
-	push si
-	push di
-	push bx
-	@@cont:
-	loop @@Row
-	mov si, -1
-	mov di, -1
-	pop cx
-	loop @@OuterLoop
-	PUSH_ALL
+	mov al, TRAIL_BIT
+	call CheckBit
+	cmp al, 1
+	jne @@cont1
+	mov al, TRAIL_BIT
+	call DisableBit
+	mov al, WALL_BIT
+	call EnableBit
+	@@cont1:
+	loop @@FindTrails
+	
+	push 0
+	push 0
+	call MarkOuterBit
+	mov cx, 2559
+	@@FillWithWalls:
+	mov bx, cx
+	mov al, OUTER_BIT
+	call CheckBit
+	cmp al, 1
+	je @@cont2
+	mov bx, cx
+	mov al, WALL_BIT
+	call CheckBit
+	cmp al, 1
+	je @@cont2
+	
+	mov bx, cx
+	mov al, WALL_BIT
+	call EnableBit
+	@@cont2:
+	loop @@FillWithWalls
 	ret
 endp
-
-proc FillArea
+	
+; DESCRIPTION: Marks All the outer area(The area we don't want to capture) using recursion
+; INPUT: (X,Y)-> Through Stack
+proc MarkOuterBit
+	push bp
+	mov bp, sp
 	
 	
+	push [bp+6]
+	push [bp+4]
+	call CheckWallBit
+	pop ax
+	cmp ax, 1
+	je @@mid_exit_func
+	push [bp+6]
+	push [bp+4]
+	call CheckOuterBit
+	pop ax
+	cmp ax, 1
+	je @@mid_exit_func
+	
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToVideo
+	pop di
+	
+	; lea cx, [outer_matrix]
+	; mov [matrix], cx
+	; mov dx, PLAYER_LENGTH
+	; mov cx, PLAYER_LENGTH
+	; call putMatrixInScreen
+	
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToGrid
+	pop bx
+	mov al, OUTER_BIT
+	call EnableBit
+	jmp @@xPlus1
+	
+	@@mid_exit_func:
+	jmp @@exit_func
+	
+	@@xPlus1:
+	mov ax, [bp+6]
+	inc ax
+	cmp ax, MAX_X
+	jg @@yPlus1
+	push ax
+	push [bp+4]
+	call  MarkOuterBit
+	; jmp @@xPlus1
+	
+	@@yPlus1:
+	mov ax, [bp+4]
+	inc ax
+	cmp ax, MAX_Y
+	jg @@xMinus1
+	push [bp+6]
+	push ax
+	call  MarkOuterBit
+	; jmp @@yPlus1
+	
+	@@xMinus1:
+	mov ax, [bp+6]
+	dec ax
+	cmp ax, MIN_X
+	jl @@yMinus1
+	push ax
+	push [bp+4]
+	call  MarkOuterBit
+	; jmp @@xMinus1
+	
+	@@yMinus1:
+	mov ax, [bp+4]
+	dec ax
+	cmp ax, MIN_Y
+	jl @@exit_func
+	push [bp+6]
+	push ax
+	call  MarkOuterBit
+	; jmp @@yMinus1
+	
+	@@exit_func:
+	pop bp
+	ret 4 
+endp	
 	
 
 
@@ -478,7 +595,6 @@ proc CheckBit
 	cmp al, 0
 	jne @@Enabled
 	jmp @@exit_func
-	
 	@@Enabled:
 	mov al, 1
 	
@@ -502,6 +618,11 @@ proc UpdatePlayer
 	call PlayerCheckLegalMove ; Checks if it is legal to move the player, boolean result in AX
 	cmp ax, 1
 	jne @@exit_func
+	
+	call PlayerCoordsToGrid 
+	mov al, PLAYER_BIT 
+	call DisableBit
+	
 	cmp [playerDirection], 0
 	je @@up
 	cmp [playerDirection], 1
@@ -513,20 +634,20 @@ proc UpdatePlayer
 	
 	@@up:
 	sub [playerY], PLAYER_SPEED
-	jmp @@UpdateGrid
+	jmp @@AddPlayerToGrid
 	
 	@@right:
 	add [playerX], PLAYER_SPEED
-	jmp @@UpdateGrid
+	jmp @@AddPlayerToGrid
 	
 	@@down:
 	add [playerY], PLAYER_SPEED
-	jmp @@UpdateGrid
+	jmp @@AddPlayerToGrid
 	
 	@@left:
 	sub [playerX], PLAYER_SPEED
 	
-	@@UpdateGrid:
+	@@AddPlayerToGrid:
 	call PlayerCoordsToGrid 
 	mov al, PLAYER_BIT 
 	call EnableBit
@@ -608,6 +729,29 @@ mov bp , sp
     pop bp 
     ret 2
 endp LoopDelay
+
+proc TimeBasedDelay
+	push bp 
+	mov bp , sp 
+    push ax
+    push cx
+	push dx
+	; mov cx, [bp+4]
+	; @@Loop:
+	; push cx
+	xor cx, cx
+	mov dx, 100
+	mov ah,86h
+	int 15h
+	; pop cx
+	inc [timer]
+	; loop @@Loop
+	pop dx
+	pop cx
+	pop ax
+	pop bp
+	ret 2
+endp TimeBasedDelay
 
 
 ; push the X
@@ -815,6 +959,24 @@ proc CheckTrailBit
 	ret 2
 endp
 
+
+; DESCRIPTION: Checks if the outer bit is enabled in 
+; 			   given grid cell, returns a boolean through stack
+; INPUT: (X, Y) -> Through stack
+; OUTPUT: boolean (1 - Enabled, 0 - Disabled) -> Through stack
+proc CheckOuterBit
+	PUSH_ALL_BP
+	push [bp+6]
+	push [bp+4]
+	call CoordinatesToGrid
+	pop bx
+	mov al, OUTER_BIT
+	call CheckBit
+	xor ah, ah
+	mov [bp+6], ax
+	POP_ALL_BP
+	ret 2
+endp
 
 ; DESCRIPTION: Fills up the cell in which the player used to be
 			 ; according to bits that are enabled in the cell
