@@ -28,7 +28,7 @@ ENEMY1_BIT = 00010000b
 ENEMY2_BIT = 00100000b
 ENEMY3_BIT = 01000000b
 ENEMY4_BIT = 10000000b
-PLAYER_LENGTH = 5
+PLAYER_LENGTH = 4
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
 MOVE_DELAY = 100
@@ -58,7 +58,6 @@ macro POP_ALL_BP
 endm
 	
 DATASEG
-
 grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
 	 
 player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(09h)
@@ -147,7 +146,7 @@ endp putMatrixInScreen
 ; Description: Function that calculates the needed Offset in video segment using the given coordinates
 proc CoordinatesToVideo
 	PUSH_ALL_BP
-	mov bx, 64*PLAYER_LENGTH*PLAYER_LENGTH
+	mov bx, 320*PLAYER_LENGTH
 	mov ax, [bp+4]
 	xor dx, dx
 	mul bx
@@ -417,9 +416,10 @@ endp
 	
 proc AddArea
 	PUSH_ALL
-	mov cx, 2559
+	mov cx, (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)
+	mov di, 0
 	@@FindTrails:
-	mov bx, cx
+	mov bx, di
 	mov al, TRAIL_BIT
 	call CheckBit
 	cmp al, 1
@@ -429,25 +429,27 @@ proc AddArea
 	mov al, WALL_BIT
 	call EnableBit
 	@@cont1:
+	inc di
 	loop @@FindTrails
 	
-	push 0
-	push 0
+	push MIN_X
+	push MIN_Y
 	call MarkOuterBit
-	push 63
-	push 0
+	push MAX_X
+	push MIN_Y
 	call MarkOuterBit
-	push 63
-	push 39
+	push MAX_X
+	push MAX_Y
 	call MarkOuterBit
-	push 0
-	push 39
+	push MIN_X
+	push MAX_Y
 	call MarkOuterBit
-	mov cx, MAX_X
+	
+	mov cx, MAX_X+1
 	mov di, 0
 	@@outer_loop:
 	push cx
-	mov cx, MAX_Y
+	mov cx, MAX_Y+1
 	mov si, 0
 	@@inner_loop:
 	push di
@@ -502,11 +504,6 @@ proc MarkOuterBit
 	
 	push [bp+6]
 	push [bp+4]
-	call CoordinatesToVideo
-	pop di
-	
-	push [bp+6]
-	push [bp+4]
 	call CoordinatesToGrid
 	pop bx
 	mov al, OUTER_BIT
@@ -551,7 +548,6 @@ proc MarkOuterBit
 	push [bp+6]
 	push ax
 	call  MarkOuterBit
-	; jmp @@yMinus1
 	
 	@@exit_func:
 	pop bp
@@ -612,7 +608,6 @@ endp
 ; Description: Disable a given bit in a given byte using NOT and AND logical operations
 ; INPUT: BX - Offset of byte on grid, AL - Bit to disable
 proc DisableBit
-
 	not al
 	and al, [bx] 
 	mov [bx], al
@@ -752,8 +747,8 @@ endp
 ; Usage: Pass by value the amount of MILISECONDS
 ; IMPORTANT: Set up a "Timer" variable to count the iterations
 proc LoopDelay
-push bp 
-mov bp , sp 
+	push bp 
+	mov bp , sp 
     push ax 
     push cx
     mov cx ,[bp+4]
@@ -777,16 +772,11 @@ proc TimeBasedDelay
     push ax
     push cx
 	push dx
-	; mov cx, [bp+4]
-	; @@Loop:
-	; push cx
 	xor cx, cx
 	mov dx, 100
 	mov ah,86h
 	int 15h
-	; pop cx
 	inc [timer]
-	; loop @@Loop
 	pop dx
 	pop cx
 	pop ax
@@ -1057,7 +1047,7 @@ proc RefreshCell
 	
 	@@exit_func:
 	POP_ALL_BP
-	ret 
+	ret 4
 endp
 ; ----------------------------------------------
 ; ---------------ENEMY FUNCTIONS----------------
