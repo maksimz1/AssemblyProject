@@ -32,6 +32,7 @@ PLAYER_LENGTH = 4
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
 MOVE_DELAY = 100
+ENEMY_MOVE_DELAY = 100	
 MIN_X = 0
 MIN_Y = 0
 MAX_X = 320/PLAYER_LENGTH-1
@@ -91,6 +92,7 @@ Enemy4X dw 0
 Enemy4Y dw 0
 Enemy4Direction db 0
 
+gameStatus db 0 ; 0 - Still playing, 1 - Lost, 2 - Won
 isExit db 0
 RndCurrentPos dw 0
 timer dw 0
@@ -165,7 +167,7 @@ endp
 ; Main Function and Loop of Game	
 
 proc PlayGame
-	
+	; ------------ Initialization
 	call CreateEnemy1
 	call CreateEnemy2
 	call CreateEnemy3
@@ -173,41 +175,63 @@ proc PlayGame
 	push [playerY]
 	call CreateWalls
 	call DrawWalls
-
+	; ------------- End of Initialization
+	
 	@@InputLoop:
 	push 1
 	call TimeBasedDelay ; Makes a delay for one milisecond
 	call ChangeDirection ; Takes input and changes direction accordingly
 	
-	; Makes the delay for updating and drawing the game Objects
+	; Makes the delay for updating and drawing the enemy
+	@@enemyDelayCheck:
+	mov ax, [timer] 
+	mov bx, ENEMY_MOVE_DELAY
+	xor dx, dx
+	div bx
+	cmp dx, 0
+	je @@enemyMove
+	jmp @@playerDelayCheck
+	
+	@@enemyMove:
+	; Moves and redraws the enemies
+	call MoveEnemy1
+	call MoveEnemy2
+	call MoveEnemy3
+	call CheckLose ; After moving the enemies, Checks if they hit the player ot the trail. AL holds the result
+	cmp al, 1
+	je @@LoseGame
+	
+	; Makes the delay for updating and drawing the player
+	@@playerDelayCheck:
 	mov ax, [timer] 
 	mov bx, MOVE_DELAY
 	xor dx, dx
 	div bx
 	cmp dx, 0
-	jne @@cont1 ; If 100 Miliseconds haven't passed, keep counting
+	je @@playerMove ; If 100 Miliseconds haven't passed, keep counting
+	jmp @@cont2
 	
-
-	; call ErasePlayer ; Erase the outdated position of the Player
+	@@playerMove:
 	call AddTrail
 	cmp ax, 1 ; Checks if we captured new area
-	jne @@cont
+	jne @@cont1
 	call AddArea
-	@@cont:
+	@@cont1:
 	push [playerX]
 	push [playerY]
 	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
 	call DrawPlayer ; Draw the player in the updated position
 	
-	call MoveEnemy1
-	call MoveEnemy2
-	call MoveEnemy3
-
-	@@cont1:
+	
+	@@cont2:
 	cmp [isExit], 1
 	je @@exitGame
 	jmp @@InputLoop
+	
+	@@LoseGame:
+	mov [gameStatus], 1
+	mov [isExit], 1
 	@@exitGame:
 	ret
 endp
@@ -232,7 +256,6 @@ endp
 
 proc DrawWalls
 	PUSH_ALL
-	
 	mov cx, MAX_X
 	mov di, 0
 	@@outer_loop:
@@ -253,7 +276,6 @@ proc DrawWalls
 	call DrawWall
 	jmp @@cont
 	
-
 	@@draw_black:
 	call ErasePlayer
 	@@cont:
@@ -262,7 +284,6 @@ proc DrawWalls
 	pop cx
 	inc di
 	loop @@outer_loop
-	
 	POP_ALL
 	ret
 endp
@@ -410,10 +431,89 @@ proc ChangeDirection
 	ret
 endp
 
+; Description: Disable a given bit in a given byte using NOT and AND logical operations
+; INPUT: BX - Offset of byte on grid, AL - Bit to disable
+proc DisableBit
+	not al
+	and al, [bx] 
+	mov [bx], al
+	ret
+endp 
+; Description: Enable a given bit in a given byte using OR logical operation
+; INPUT: BX - Offset of byte to, AL - Bit to Enable
+proc EnableBit
+	or al, [bx]
+	mov [bx], al
+	ret
+endp 
+
+; Description: Checks if a given bit in a given byte is enabled
+;			   Using AND operation between the two values and if
+;			   the operation result differs from 0, it is enabled
+; INPUT: BX - Offset of byte on grid, AL - Bit to Check
+; OUTPUT: AL - boolean(1 - Enabled, 0 - Disabled)
+proc CheckBit
+	and al, [bx]
+	cmp al, 0
+	jne @@Enabled
+	jmp @@exit_func
+	@@Enabled:
+	mov al, 1
+	@@exit_func:
+	ret
+endp
+
 ; ----------------------------------------------
 ; ---------------PLAYER FUNCTIONS---------------
 ; ----------------------------------------------
+
+; DESCRIPTION: Checks for player loss
+; How it works: FOR EACH ENEMY SEPERATELY
+; 1) Gets the Enemy's current cell on the grid
+; 2) Checks the cell for the Player bit and the trail bit
+; If any of them is enabled - The player has lost
+; OUTPUT: AL => Is the player lost (1-Lost, 0-Didnt lose)
+proc CheckLose
+	push [Enemy1X]
+	push [Enemy1Y]
+	call CoordinatesToGrid 
+	pop bx ; BX => Cell of Enemy1 on the grid
+	mov al, PLAYER_BIT + TRAIL_BIT 
+	call CheckBit ; Checks if either the player or the trail is on the enemy cell
+	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
+	cmp al, 1
+	je @@exit_func
 	
+	push [Enemy2X]
+	push [Enemy2Y]
+	call CoordinatesToGrid 
+	pop bx ; BX => Cell of Enemy2 on the grid
+	mov al, PLAYER_BIT + TRAIL_BIT 
+	call CheckBit ; Checks if either the player or the trail is on the enemy cell
+	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
+	cmp al, 1
+	je @@exit_func
+	
+	push [Enemy3X]
+	push [Enemy3Y]
+	call CoordinatesToGrid 
+	pop bx ; BX => Cell of Enemy3 on the grid
+	mov al, PLAYER_BIT + TRAIL_BIT 
+	call CheckBit ; Checks if either the player or the trail is on the enemy cell
+	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
+	
+	@@exit_func:
+	ret
+endp CheckLose
+
+	
+
+; DESCRIPTION: Add new "Walls"/Area to the part surrounded by the trail
+; How it works:
+; 1) Replaces all trail pieces with wall pieces(disables trail bit, enables wall bit)
+; 2) Calls MarkOuterBit function from all 4 corners of the screen (Allowing us to mark all of the outside/unwanted area)
+; 3) Iterates through all the cells on the grid and for each cell that's not marked as an outside/unwanted cell, Add a wall piece
+; 4) Disables the outside bit for all the cells on the grid(allowing us to use the same method the next time we capture an area)
 proc AddArea
 	PUSH_ALL
 	mov cx, (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)
@@ -553,8 +653,6 @@ proc MarkOuterBit
 	pop bp
 	ret 4 
 endp	
-	
-
 
 ; OUTPUT: AX - Boolean value(1 - Legal, 0 - Illegal)
 proc PlayerCheckLegalMove
@@ -600,39 +698,6 @@ proc PlayerCheckLegalMove
 	jmp @@exit_func
 	@@Illegal:
 	mov ax, 0
-	
-	@@exit_func:
-	ret
-endp
-	
-; Description: Disable a given bit in a given byte using NOT and AND logical operations
-; INPUT: BX - Offset of byte on grid, AL - Bit to disable
-proc DisableBit
-	not al
-	and al, [bx] 
-	mov [bx], al
-	ret
-endp 
-; Description: Enable a given bit in a given byte using OR logical operation
-; INPUT: BX - Offset of byte to, AL - Bit to Enable
-proc EnableBit
-	or al, [bx]
-	mov [bx], al
-	ret
-endp 
-
-; Description: Checks if a given bit in a given byte is enabled
-;			   Using AND operation between the two values and if
-;			   the operation result differs from 0, it is enabled
-; INPUT: BX - Offset of byte on grid, AL - Bit to Check
-; OUTPUT: AL - boolean(1 - Enabled, 0 - Disabled)
-proc CheckBit
-	and al, [bx]
-	cmp al, 0
-	jne @@Enabled
-	jmp @@exit_func
-	@@Enabled:
-	mov al, 1
 	
 	@@exit_func:
 	ret
@@ -772,11 +837,16 @@ proc TimeBasedDelay
     push ax
     push cx
 	push dx
-	xor cx, cx
-	mov dx, 100
+	mov cx, [bp+4]
+	@@MyLoop:
+	push cx
+	mov cx, 0
+	mov dx, 3D0h
 	mov ah,86h
 	int 15h
 	inc [timer]
+	pop cx
+	loop @@MyLoop
 	pop dx
 	pop cx
 	pop ax
