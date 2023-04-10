@@ -28,7 +28,7 @@ ENEMY1_BIT = 00010000b
 ENEMY2_BIT = 00100000b
 ENEMY3_BIT = 01000000b
 ENEMY4_BIT = 10000000b
-PLAYER_LENGTH = 4
+PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
 MOVE_DELAY = 100
@@ -37,6 +37,7 @@ MIN_X = 0
 MIN_Y = 0
 MAX_X = 320/PLAYER_LENGTH-1
 MAX_Y = 200/PLAYER_LENGTH-1
+MENU_BUTTON_X=137
 macro PUSH_ALL_BP
 	push bp
 	mov bp, sp
@@ -60,19 +61,281 @@ endm
 	
 DATASEG
 grid db (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH) dup(0) ; 64 * 40
-	 
-player_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(09h)
-trail_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ah)
-enemy_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Ch)
-wall_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(02h)
+
+Palette db 000h,000h,000h,000h,000h,000h,080h,000h,000h,080h
+		db 000h,000h,000h,080h,080h,000h,080h,000h,000h,000h
+		db 080h,000h,080h,000h,080h,080h,000h,000h,0C0h,0C0h
+		db 0C0h,000h,0C0h,0DCh,0C0h,000h,0F0h,0CAh,0A6h,000h
+		db 000h,020h,040h,000h,000h,020h,060h,000h,000h,020h
+		db 080h,000h,000h,020h,0A0h,000h,000h,020h,0C0h,000h
+		db 000h,020h,0E0h,000h,000h,040h,000h,000h,000h,040h
+		db 020h,000h,000h,040h,040h,000h,000h,040h,060h,000h
+		db 000h,040h,080h,000h,000h,040h,0A0h,000h,000h,040h
+		db 0C0h,000h,000h,040h,0E0h,000h,000h,060h,000h,000h
+		db 000h,060h,020h,000h,000h,060h,040h,000h,000h,060h
+		db 060h,000h,000h,060h,080h,000h,000h,060h,0A0h,000h
+		db 000h,060h,0C0h,000h,000h,060h,0E0h,000h,000h,080h
+		db 000h,000h,000h,080h,020h,000h,000h,080h,040h,000h
+		db 000h,080h,060h,000h,000h,080h,080h,000h,000h,080h
+		db 0A0h,000h,000h,080h,0C0h,000h,000h,080h,0E0h,000h
+		db 000h,0A0h,000h,000h,000h,0A0h,020h,000h,000h,0A0h
+		db 040h,000h,000h,0A0h,060h,000h,000h,0A0h,080h,000h
+		db 000h,0A0h,0A0h,000h,000h,0A0h,0C0h,000h,000h,0A0h
+		db 0E0h,000h,000h,0C0h,000h,000h,000h,0C0h,020h,000h
+		db 000h,0C0h,040h,000h,000h,0C0h,060h,000h,000h,0C0h
+		db 080h,000h,000h,0C0h,0A0h,000h,000h,0C0h,0C0h,000h
+		db 000h,0C0h,0E0h,000h,000h,0E0h,000h,000h,000h,0E0h
+		db 020h,000h,000h,0E0h,040h,000h,000h,0E0h,060h,000h
+		db 000h,0E0h,080h,000h,000h,0E0h,0A0h,000h,000h,0E0h
+		db 0C0h,000h,000h,0E0h,0E0h,000h,040h,000h,000h,000h
+		db 040h,000h,020h,000h,040h,000h,040h,000h,040h,000h
+		db 060h,000h,040h,000h,080h,000h,040h,000h,0A0h,000h
+		db 040h,000h,0C0h,000h,040h,000h,0E0h,000h,040h,020h
+		db 000h,000h,040h,020h,020h,000h,040h,020h,040h,000h
+		db 040h,020h,060h,000h,040h,020h,080h,000h,040h,020h
+		db 0A0h,000h,040h,020h,0C0h,000h,040h,020h,0E0h,000h
+		db 040h,040h,000h,000h,040h,040h,020h,000h,040h,040h
+		db 040h,000h,040h,040h,060h,000h,040h,040h,080h,000h
+		db 040h,040h,0A0h,000h,040h,040h,0C0h,000h,040h,040h
+		db 0E0h,000h,040h,060h,000h,000h,040h,060h,020h,000h
+		db 040h,060h,040h,000h,040h,060h,060h,000h,040h,060h
+		db 080h,000h,040h,060h,0A0h,000h,040h,060h,0C0h,000h
+		db 040h,060h,0E0h,000h,040h,080h,000h,000h,040h,080h
+		db 020h,000h,040h,080h,040h,000h,040h,080h,060h,000h
+		db 040h,080h,080h,000h,040h,080h,0A0h,000h,040h,080h
+		db 0C0h,000h,040h,080h,0E0h,000h,040h,0A0h,000h,000h
+		db 040h,0A0h,020h,000h,040h,0A0h,040h,000h,040h,0A0h
+		db 060h,000h,040h,0A0h,080h,000h,040h,0A0h,0A0h,000h
+		db 040h,0A0h,0C0h,000h,040h,0A0h,0E0h,000h,040h,0C0h
+		db 000h,000h,040h,0C0h,020h,000h,040h,0C0h,040h,000h
+		db 040h,0C0h,060h,000h,040h,0C0h,080h,000h,040h,0C0h
+		db 0A0h,000h,040h,0C0h,0C0h,000h,040h,0C0h,0E0h,000h
+		db 040h,0E0h,000h,000h,040h,0E0h,020h,000h,040h,0E0h
+		db 040h,000h,040h,0E0h,060h,000h,040h,0E0h,080h,000h
+		db 040h,0E0h,0A0h,000h,040h,0E0h,0C0h,000h,040h,0E0h
+		db 0E0h,000h,080h,000h,000h,000h,080h,000h,020h,000h
+		db 080h,000h,040h,000h,080h,000h,060h,000h,080h,000h
+		db 080h,000h,080h,000h,0A0h,000h,080h,000h,0C0h,000h
+		db 080h,000h,0E0h,000h,080h,020h,000h,000h,080h,020h
+		db 020h,000h,080h,020h,040h,000h,080h,020h,060h,000h
+		db 080h,020h,080h,000h,080h,020h,0A0h,000h,080h,020h
+		db 0C0h,000h,080h,020h,0E0h,000h,080h,040h,000h,000h
+		db 080h,040h,020h,000h,080h,040h,040h,000h,080h,040h
+		db 060h,000h,080h,040h,080h,000h,080h,040h,0A0h,000h
+		db 080h,040h,0C0h,000h,080h,040h,0E0h,000h,080h,060h
+		db 000h,000h,080h,060h,020h,000h,080h,060h,040h,000h
+		db 080h,060h,060h,000h,080h,060h,080h,000h,080h,060h
+		db 0A0h,000h,080h,060h,0C0h,000h,080h,060h,0E0h,000h
+		db 080h,080h,000h,000h,080h,080h,020h,000h,080h,080h
+		db 040h,000h,080h,080h,060h,000h,080h,080h,080h,000h
+		db 080h,080h,0A0h,000h,080h,080h,0C0h,000h,080h,080h
+		db 0E0h,000h,080h,0A0h,000h,000h,080h,0A0h,020h,000h
+		db 080h,0A0h,040h,000h,080h,0A0h,060h,000h,080h,0A0h
+		db 080h,000h,080h,0A0h,0A0h,000h,080h,0A0h,0C0h,000h
+		db 080h,0A0h,0E0h,000h,080h,0C0h,000h,000h,080h,0C0h
+		db 020h,000h,080h,0C0h,040h,000h,080h,0C0h,060h,000h
+		db 080h,0C0h,080h,000h,080h,0C0h,0A0h,000h,080h,0C0h
+		db 0C0h,000h,080h,0C0h,0E0h,000h,080h,0E0h,000h,000h
+		db 080h,0E0h,020h,000h,080h,0E0h,040h,000h,080h,0E0h
+		db 060h,000h,080h,0E0h,080h,000h,080h,0E0h,0A0h,000h
+		db 080h,0E0h,0C0h,000h,080h,0E0h,0E0h,000h,0C0h,000h
+		db 000h,000h,0C0h,000h,020h,000h,0C0h,000h,040h,000h
+		db 0C0h,000h,060h,000h,0C0h,000h,080h,000h,0C0h,000h
+		db 0A0h,000h,0C0h,000h,0C0h,000h,0C0h,000h,0E0h,000h
+		db 0C0h,020h,000h,000h,0C0h,020h,020h,000h,0C0h,020h
+		db 040h,000h,0C0h,020h,060h,000h,0C0h,020h,080h,000h
+		db 0C0h,020h,0A0h,000h,0C0h,020h,0C0h,000h,0C0h,020h
+		db 0E0h,000h,0C0h,040h,000h,000h,0C0h,040h,020h,000h
+		db 0C0h,040h,040h,000h,0C0h,040h,060h,000h,0C0h,040h
+		db 080h,000h,0C0h,040h,0A0h,000h,0C0h,040h,0C0h,000h
+		db 0C0h,040h,0E0h,000h,0C0h,060h,000h,000h,0C0h,060h
+		db 020h,000h,0C0h,060h,040h,000h,0C0h,060h,060h,000h
+		db 0C0h,060h,080h,000h,0C0h,060h,0A0h,000h,0C0h,060h
+		db 0C0h,000h,0C0h,060h,0E0h,000h,0C0h,080h,000h,000h
+		db 0C0h,080h,020h,000h,0C0h,080h,040h,000h,0C0h,080h
+		db 060h,000h,0C0h,080h,080h,000h,0C0h,080h,0A0h,000h
+		db 0C0h,080h,0C0h,000h,0C0h,080h,0E0h,000h,0C0h,0A0h
+		db 000h,000h,0C0h,0A0h,020h,000h,0C0h,0A0h,040h,000h
+		db 0C0h,0A0h,060h,000h,0C0h,0A0h,080h,000h,0C0h,0A0h
+		db 0A0h,000h,0C0h,0A0h,0C0h,000h,0C0h,0A0h,0E0h,000h
+		db 0C0h,0C0h,000h,000h,0C0h,0C0h,020h,000h,0C0h,0C0h
+		db 040h,000h,0C0h,0C0h,060h,000h,0C0h,0C0h,080h,000h
+		db 0C0h,0C0h,0A0h,000h,0F0h,0FBh,0FFh,000h,0A4h,0A0h
+		db 0A0h,000h,080h,080h,080h,000h,000h,000h,0FFh,000h
+		db 000h,0FFh,000h,000h,000h,0FFh,0FFh,000h,0FFh,000h
+		db 000h,000h,0FFh,000h,0FFh,000h,0FFh,0FFh,000h,000h
+		db 0FFh,0FFh,0FFh,000h
+
+player_matrix db 000h,0E0h,0E0h,0E0h,000h,0E0h,0E0h,0E0h,0E0h,0E0h
+			db 0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h
+			db 000h,0E0h,0E0h,0E0h,000h
+player_wall_matrix db 039h,0E0h,0E0h,0E0h,039h,0E0h,0E0h,0E0h,0E0h,0E0h
+			db 0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h,0E0h
+			db 039h,0E0h,0E0h,0E0h,039h
+trail_matrix db 0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh
+			db 0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh
+			db 0FEh,0FEh,0FEh,0FEh,0FEh
+trail_vert_matrix db 000h,000h,000h,000h,000h,0FEh,0FEh,0FEh,0FEh,0FEh
+		db 0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh,0FEh
+		db 000h,000h,000h,000h,000h
+trail_hor_matrix db 000h,0FEh,0FEh,0FEh,000h,000h,0FEh,0FEh,0FEh,000h
+		db 000h,0FEh,0FEh,0FEh,000h,000h,0FEh,0FEh,0FEh,000h
+		db 000h,0FEh,0FEh,0FEh,000h
+trail1_matrix db 000h,000h,000h,000h,000h,0FEh,0FEh,0FEh,0FEh,000h
+		db 0FEh,0FEh,0FEh,0FEh,000h,0FEh,0FEh,0FEh,0FEh,000h
+		db 000h,0FEh,0FEh,0FEh,000h
+trail2_matrix db 000h,000h,000h,000h,000h,000h,0FEh,0FEh,0FEh,0FEh
+		db 000h,0FEh,0FEh,0FEh,0FEh,000h,0FEh,0FEh,0FEh,0FEh
+		db 000h,0FEh,0FEh,0FEh,000h
+trail3_matrix db 000h,0FEh,0FEh,0FEh,000h,0FEh,0FEh,0FEh,0FEh,000h
+		db 0FEh,0FEh,0FEh,0FEh,000h,0FEh,0FEh,0FEh,0FEh,000h
+		db 000h,000h,000h,000h,000h
+trail4_matrix db 000h,0FEh,0FEh,0FEh,000h,000h,0FEh,0FEh,0FEh,0FEh
+		db 000h,0FEh,0FEh,0FEh,0FEh,000h,0FEh,0FEh,0FEh,0FEh
+		db 000h,000h,000h,000h,000h
+
+enemy_matrix db 000h,0F9h,0F9h,0F9h,000h,0F9h,0F9h,0F9h,0F9h,0F9h
+		db 0F9h,0F9h,0F9h,0F9h,0F9h,0F9h,0F9h,0F9h,0F9h,0F9h
+		db 000h,0F9h,0F9h,0F9h,000h
+wall_matrix db 039h,039h,039h,039h,039h,039h,039h,039h,039h,039h
+			db 039h,039h,039h,039h,039h,039h,039h,039h,039h,039h
+			db 039h,039h,039h,039h,039h
 outer_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup(0Dh)
 black_matrix db PLAYER_LENGTH*PLAYER_LENGTH dup (0)
+; start_button_matrix db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,000h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,000h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,000h,000h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,000h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h
+		; db 000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h,000h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,000h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,000h,000h,000h,000h,000h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h,0D0h,0D0h
+		; db 0D0h,0D0h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h
+		; db 000h,000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h
+		; db 0D0h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h,0D0h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h
+		; db 000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,000h,000h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,000h,000h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h
+		; db 000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h
+		; db 000h,0D0h,0D0h,0D0h,0D0h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,0D0h,0D0h,0D0h,0D0h,0D0h,0D0h,0D0h
+		; db 0D0h,0D0h,0D0h,000h,000h,0D0h,0D0h,0D0h,0D0h,000h
+		; db 000h,0D0h,0D0h,0D0h,0D0h,000h,000h,000h,000h,000h
+		; db 0D0h,0D0h,0D0h,0D0h,000h,000h,000h
+; exit_button_matrix db 000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,000h,000h,0F1h,0F1h,0F1h,0F1h,000h,000h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 000h,000h,000h,000h,000h,000h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h
+		; db 000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h
+		; db 0D0h,0D0h,0D0h,0D0h,0D0h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,000h,0D0h,0D0h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,0D0h,0D0h,0D0h,000h,000h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h
+		; db 000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h
+		; db 000h,000h,000h,000h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,000h,000h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h,0D0h,0D0h
+		; db 000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,0D0h
+		; db 0F1h,0F1h,0F1h,0F1h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,000h,000h,000h,000h,000h,000h,000h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,000h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h
+		; db 000h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,000h,000h,0F1h,0F1h
+		; db 0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h
+		; db 0F1h,0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h,0F1h,0D0h
+		; db 000h,0F1h,0F1h,0F1h,0F1h,0D0h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0D0h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h
+		; db 0D0h,000h,000h,000h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,0D0h,0D0h,0D0h,0D0h,0D0h,0D0h,0D0h,0D0h
+		; db 0D0h,000h,000h,0D0h,0D0h,0D0h,0D0h,000h,000h,0D0h
+		; db 0D0h,0D0h,0D0h,000h,000h,0D0h,0D0h,0D0h,0D0h,000h
+		; db 000h,000h,000h,000h,0D0h,0D0h,0D0h,0D0h,000h,000h
+		; db 000h,000h,000h,000h,000h,000h,000h
+; arrow_matrix db 000h,000h,000h,000h,000h,000h,000h,000h,000h,0F1h
+		; db 0F1h,000h,000h,000h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,000h,0F1h,0FFh,0FFh,0F1h
+		; db 000h,000h,000h,000h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,0F1h,0FFh,0FFh,0F1h,0F1h
+		; db 000h,000h,000h,000h,000h,0F1h,0F1h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0FFh,0FFh,0FFh,0FFh,0F1h,0F1h
+		; db 000h,000h,0F1h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		; db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0F1h,000h
+		; db 0F1h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		; db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0F1h,0F1h,0FFh
+		; db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		; db 0FFh,0FFh,0FFh,0FFh,0F1h,000h,000h,0F1h,0F1h,0F1h
+		; db 0F1h,0F1h,0F1h,0F1h,0F1h,0F1h,0FFh,0FFh,0FFh,0F1h
+		; db 0F1h,0F1h,000h,000h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,0F1h,0FFh,0FFh,0F1h,0F1h,000h,000h
+		; db 000h,000h,000h,000h,000h,000h,000h,000h,000h,000h
+		; db 0F1h,0FFh,0FFh,0F1h,000h,000h,000h,000h,000h,000h
+		; db 000h,000h,000h,000h,000h,000h,000h,000h,000h,0F1h
+		; db 0F1h,000h,000h,000h,000h,000h,000h,000h
+; erase_arrow_matrix db 11*18 dup(0)
 matrix dw ?
+
 
 playerX dw 5 ; Player's Location relative to GRID
 playerY dw 5
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
 oldPlayerDirection db 0 ; previous Direction of movement
+
+Level db 1
 
 IsDrawingTrail db 0
 
@@ -80,16 +343,16 @@ Enemy1X dw 20
 Enemy1Y dw 2
 Enemy1Direction db 0
 
-Enemy2X dw 0
-Enemy2Y dw 0
+Enemy2X dw MAX_X+1
+Enemy2Y dw MAX_Y+1
 Enemy2Direction db 0
 
-Enemy3X dw 0
-Enemy3Y dw 0
+Enemy3X dw MAX_X+1
+Enemy3Y dw MAX_Y+1
 Enemy3Direction db 0
 
-Enemy4X dw 0
-Enemy4Y dw 0
+Enemy4X dw MAX_X+1
+Enemy4Y dw MAX_Y+1
 Enemy4Direction db 0
 
 gameStatus db 0 ; 0 - Still playing, 1 - Lost, 2 - Won
@@ -104,12 +367,64 @@ start:
 	mov ds, ax
 	mov ax, 13h
 	int 10h
+	call CopyBmpPalette
 	call PlayGame
+	; call StartMenu
 	
 exit:
 	mov ax, 4c00h
 	int 21h
 
+; ; DESCRIPTION: Responsible for the Starting menu functionality
+; ;			   Allows the player to choose to exit the game, view info page and start the game
+; proc StartMenu
+	; PUSH_ALL
+	; call DrawButtons
+	; POP_ALL
+	; ret
+; endp
+
+; ; DESCRIPTION: Draws all the Start Menu buttons
+; proc DrawButtons
+	; ; Draw the Play button
+	; PUSH_ALL_BP
+	; push MENU_BUTTON_X/5
+	; push 80/5
+	; call CoordinatesToVideo
+	; mov dx, 47
+	; mov cx, 11
+	; mov bx, offset start_button_matrix
+	; mov [matrix], bx
+	; pop di
+	; call PutMatrixInScreen
+	; ; Draw the exit button
+	; push MENU_BUTTON_X/5
+	; push 120/5
+	; call CoordinatesToVideo
+	; mov dx, 47
+	; mov cx, 11
+	; mov bx, offset exit_button_matrix
+	; mov [matrix], bx
+	; pop di
+	; call PutMatrixInScreen
+	; ret
+	; POP_ALL_BP
+; endp
+
+; ; INPUT: (X,Y) -> through stack
+; proc DrawArrow
+	; PUSH_ALL_BP
+	; push MENU_BUTTON_X/5
+	; push 80/5
+	; call CoordinatesToVideo
+	; mov dx, 47
+	; mov cx, 11
+	; mov bx, offset start_button_matrix
+	; mov [matrix], bx
+	; pop di
+	; call PutMatrixInScreen
+	; ret
+; endp
 ; in dx how many cols (horizontal)
 ; in cx how many rows (vertical)
 ; in matrix - the offset of what to copy
@@ -164,17 +479,42 @@ proc CoordinatesToVideo
 	ret 2
 endp
 
-; Main Function and Loop of Game	
+proc PlayLevel1
+	call CreateEnemy1
+	mov [Level], 1
+	call PlayGame
+	ret
+endp
 
+proc PlayLevel2
+	call CreateEnemy2
+	mov [Level], 2
+	call PlayGame
+	ret
+endp
+
+proc PlayLevel3
+	call CreateEnemy3
+	mov [Level], 3
+	call PlayGame
+	ret
+endp
+
+proc PlayLevel4
+	call CreateEnemy4
+	mov [Level], 4
+	call PlayGame
+	ret
+endp
+
+; Main Function and Loop of Game	
 proc PlayGame
 	; ------------ Initialization
-	call CreateEnemy1
-	call CreateEnemy2
-	call CreateEnemy3
 	push [playerX]
 	push [playerY]
 	call CreateWalls
 	call DrawWalls
+	call CreateEnemies
 	; ------------- End of Initialization
 	
 	@@InputLoop:
@@ -193,13 +533,12 @@ proc PlayGame
 	jmp @@playerDelayCheck
 	
 	@@enemyMove:
-	; Moves and redraws the enemies
-	call MoveEnemy1
-	call MoveEnemy2
-	call MoveEnemy3
+	; Moves and redraws the enemies (according to the level)
+	call MoveEnemies
+	@@cont3:
 	call CheckLose ; After moving the enemies, Checks if they hit the player ot the trail. AL holds the result
 	cmp al, 1
-	je @@LoseGame
+	je @@Mid_LoseGame
 	
 	; Makes the delay for updating and drawing the player
 	@@playerDelayCheck:
@@ -210,7 +549,8 @@ proc PlayGame
 	cmp dx, 0
 	je @@playerMove ; If 100 Miliseconds haven't passed, keep counting
 	jmp @@cont2
-	
+	@@Mid_LoseGame:
+	jmp @@LoseGame ; did this to avoid 'Relative Jump Out of Range'
 	@@playerMove:
 	call AddTrail
 	cmp ax, 1 ; Checks if we captured new area
@@ -221,8 +561,28 @@ proc PlayGame
 	push [playerY]
 	call RefreshCell
 	call UpdatePlayer ; Updates Player's position according to playerDirection
-	call DrawPlayer ; Draw the player in the updated position
 	
+	; Draws the player with the correct background by checking if there is a wall in the background
+	push [playerX]
+	push [playerY]
+	call CheckWallBit
+	pop ax
+	cmp ax, 0
+	je @@RegularBackground
+	push [playerX]
+	push [playerY]
+	push offset player_wall_matrix
+	call DrawMatrix
+	jmp @@cont2
+	@@RegularBackground:
+	push [playerX]
+	push [playerY]
+	push offset player_matrix
+	call DrawMatrix ; Draw the player in the updated position
+	
+	; Saves the current direction for next iteration
+	mov bl, [playerDirection] 
+	mov [oldPlayerDirection], bl
 	
 	@@cont2:
 	cmp [isExit], 1
@@ -235,24 +595,7 @@ proc PlayGame
 	@@exitGame:
 	ret
 endp
-	
-; DESCRIPTION: Draws the wall matrix using PutMatrixInScreen
-; INPUT: (X, Y) -> Through Stack
-; OUTPUT: Draws wall to screen at given coordinates 
-proc DrawWall
-	PUSH_ALL_BP
-	lea cx, [wall_matrix]
-	mov [matrix], cx
-	push [bp+6]
-	push [bp+4]
-	call CoordinatesToVideo
-	pop di
-	mov cx, PLAYER_LENGTH
-	mov dx, PLAYER_LENGTH
-	call PutMatrixInScreen
-	POP_ALL_BP
-	ret 4
-endp
+
 
 proc DrawWalls
 	PUSH_ALL
@@ -273,11 +616,15 @@ proc DrawWalls
 	@@draw_wall:
 	push di
 	push si
-	call DrawWall
+	push offset wall_matrix
+	call DrawMatrix
 	jmp @@cont
 	
 	@@draw_black:
-	call ErasePlayer
+	push [playerX]
+	push [playerY]
+	push offset black_matrix
+	call DrawMatrix
 	@@cont:
 	inc si
 	loop @@inner_loop
@@ -379,7 +726,7 @@ proc AddTrail
 endp
 
 proc ChangeDirection
-	PUSH_ALL
+	PUSH_ALL	
 	mov ah, 1
 	int 16h
 	jz @@exit
@@ -431,6 +778,39 @@ proc ChangeDirection
 	ret
 endp
 
+; Will move out to screen memory the colors
+; video ports are 3C8h for number of first color
+; and 3C9h for all rest
+proc CopyBmpPalette		near					
+										
+	push cx
+	push dx
+	
+	mov si,offset Palette
+	mov cx,256
+	mov dx,3C8h
+	mov al,0  ; black first							
+	out dx,al ;3C8h
+	inc dx	  ;3C9h
+CopyNextColor:
+	mov al,[si+2] 		; Red				
+	shr al,2 			; divide by 4 Max (cos max is 63 and we have here max 255 ) (loosing color resolution).				
+	out dx,al 						
+	mov al,[si+1] 		; Green.				
+	shr al,2            
+	out dx,al 							
+	mov al,[si] 		; Blue.				
+	shr al,2            
+	out dx,al 							
+	add si,4 			; Point to next color.  (4 bytes for each color BGR + null)				
+								
+	loop CopyNextColor
+	
+	pop dx
+	pop cx
+	
+	ret
+endp CopyBmpPalette
 ; Description: Disable a given bit in a given byte using NOT and AND logical operations
 ; INPUT: BX - Offset of byte on grid, AL - Bit to disable
 proc DisableBit
@@ -566,7 +946,8 @@ proc AddArea
 	call EnableBit
 	push di
 	push si
-	call DrawWall
+	push offset wall_matrix
+	call DrawMatrix
 	jmp @@cont
 	
 	@@ClearMark:
@@ -758,52 +1139,111 @@ proc UpdatePlayer
 	ret
 endp
 
-; Draws black square using PutMatrixInScreen
-proc ErasePlayer
-	PUSH_ALL
-	lea cx, [black_matrix]
+; Draws the a 5x5 matrix using PutMatrixInScreen
+proc DrawMatrix
+	PUSH_ALL_BP
+	mov cx, [bp+4]
 	mov [matrix], cx
-	push [playerX] ; Pass X for CoordinatesToVideo
-	push [playerY] ; Pass Y for CoordinatesToVideo
+	push [bp+8] ; Pass X for CoordinatesToVideo
+	push [bp+6] ; Pass Y for CoordinatesToVideo
 	call CoordinatesToVideo
 	pop di
 	mov cx, PLAYER_LENGTH
 	mov dx, PLAYER_LENGTH
 	call PutMatrixInScreen
-	POP_ALL
-	ret
+	POP_ALL_BP
+	ret 6
 endp
 
-; Draws the player using PutMatrixInScreen
-proc DrawPlayer
-	PUSH_ALL
-	lea cx, [player_matrix]
-	mov [matrix], cx
-	push [playerX]
-	push [playerY]
-	call CoordinatesToVideo
-	pop di
-	mov cx, PLAYER_LENGTH
-	mov dx, PLAYER_LENGTH
-	call PutMatrixInScreen
-	POP_ALL
-	ret
-endp
 	
 ; DESCRIPTION: Draws the trail matrix using PutMatrixInScreen
+; 			   Draws the correct trail by checking current and old direction
 ; INPUT: (X, Y) -> Through Stack
 ; OUTPUT: Draws trail to screen at given coordinates 
 proc DrawTrail
 	PUSH_ALL_BP
-	lea cx, [trail_matrix]
-	mov [matrix], cx
+	mov al, [playerDirection]
+	mov ah, [oldPlayerDirection]
+	cmp al, 0 ; current direction UP
+	je @@CheckUp
+	cmp al, 1 ; current direction RIGHT
+	je @@CheckRight
+	cmp al, 2 ; current direction DOWN
+	je @@CheckDown
+	cmp al, 3 ; current direction LEFT
+	je @@CheckLeft
+	
+	@@CheckUp:
+		cmp ah, 1
+		je @@Case3
+		cmp ah, 3
+		je @@Case4
+		jmp @@Horizontal
+		
+	@@CheckDown:
+		cmp ah, 1
+		je @@Case1
+		cmp ah, 3
+		je @@Case2
+		jmp @@Horizontal
+		
+	@@CheckLeft:
+		cmp ah, 0
+		je @@Case1
+		cmp ah, 2
+		je @@Case3
+		jmp @@Vertical
+	
+	@@CheckRight:
+		cmp ah, 0
+		je @@Case2
+		cmp ah, 2
+		je @@Case4
+		jmp @@Vertical
+		
+	@@Case1:
 	push [bp+6]
 	push [bp+4]
-	call CoordinatesToVideo
-	pop di
-	mov cx, PLAYER_LENGTH
-	mov dx, PLAYER_LENGTH
-	call PutMatrixInScreen
+	push offset trail1_matrix
+	call DrawMatrix
+	jmp @@exit_func
+	
+	@@Case2:
+	push [bp+6]
+	push [bp+4]
+	push offset trail2_matrix
+	call DrawMatrix
+	jmp @@exit_func
+	
+	@@Case3:
+	push [bp+6]
+	push [bp+4]
+	push offset trail3_matrix
+	call DrawMatrix
+	jmp @@exit_func
+	
+	@@Case4:
+	push [bp+6]
+	push [bp+4]
+	push offset trail4_matrix
+	call DrawMatrix
+	jmp @@exit_func
+		
+	@@Horizontal:
+			push [bp+6]
+			push [bp+4]
+			push offset trail_hor_matrix
+			call DrawMatrix
+			jmp @@exit_func	
+			
+	@@Vertical:
+		push [bp+6]
+		push [bp+4]
+		push offset trail_vert_matrix
+		call DrawMatrix
+		
+	
+	@@exit_func:
 	POP_ALL_BP
 	ret 4
 endp
@@ -831,6 +1271,15 @@ proc LoopDelay
     ret 2
 endp LoopDelay
 
+; DESCRIPTION: Delays the program for the inputed amount of Miliseconds
+; ------------------------------------------
+; SETUP:
+; create a variable called timer, or dont and just erase the lines that use it
+;
+; HOW TO USE:
+; push {amount of miliseconds}
+; call TimeBasedDelay
+; ------------------------------------------
 proc TimeBasedDelay
 	push bp 
 	mov bp , sp 
@@ -1000,10 +1449,7 @@ proc PrintHexaNumberWithColor
 	shl cx, 4
 	dec di
 	cmp di, 0
-	jne @@ConvertToASCII
-	
-	
-	
+	jne @@ConvertToASCII	
 	@@exit_func:
 	POP_ALL_BP
 	ret 4
@@ -1011,7 +1457,6 @@ endp
 
 ; Description: moves cursor to given positiong
 ; INPUT: X coordinate through stack, Y coordinate through stack
-
 proc MoveCursor
 	PUSH_ALL_BP
 	mov ah, 02h
@@ -1103,7 +1548,8 @@ proc RefreshCell
 	@@draw_wall:
 	push [bp+6]
 	push [bp+4]
-	call DrawWall
+	push offset wall_matrix
+	call DrawMatrix
 	jmp @@exit_func
 	
 	@@draw_trail:
@@ -1113,15 +1559,49 @@ proc RefreshCell
 	jmp @@exit_func
 
 	@@draw_black:
-	call ErasePlayer
+	push [playerX]
+	push [playerY]
+	push offset black_matrix
+	call DrawMatrix
 	
 	@@exit_func:
 	POP_ALL_BP
 	ret 4
 endp
+
 ; ----------------------------------------------
 ; ---------------ENEMY FUNCTIONS----------------
 ; ----------------------------------------------
+
+proc MoveEnemies
+	call MoveEnemy1
+	cmp [Level], 1
+	je @@exit_func
+	call MoveEnemy2
+	cmp [Level], 2
+	je @@exit_func
+	call MoveEnemy3
+	cmp [Level], 3
+	je @@exit_func
+	call MoveEnemy4
+	@@exit_func:
+	ret
+endp
+
+proc CreateEnemies
+	call CreateEnemy1
+	cmp [Level], 1
+	je @@exit_func
+	call CreateEnemy2
+	cmp [Level], 2
+	je @@exit_func
+	call CreateEnemy3
+	cmp [Level], 3
+	je @@exit_func
+	call CreateEnemy4
+	@@exit_func:
+	ret
+endp
 
 ; INPUT: (Enemy X, Enemy Y, offset of EnemyDirection) -> Through Stack
 ; OUTPUT: Change of value in EnemyDirection(if needed)
