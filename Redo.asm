@@ -1,11 +1,11 @@
 IDEAL
 MODEL small
-STACK 4000h
+STACK 7000h
 
 macro PUSH_ALL
 	push ax
 	push bx
-	push cx
+	push cx		
 	push dx
 	push di
 	push si
@@ -38,7 +38,8 @@ MIN_Y = 0
 MAX_X = 320/PLAYER_LENGTH-1
 MAX_Y = 200/PLAYER_LENGTH-1
 MENU_BUTTON_X=137
-
+WIN_PRECENTAGE=15
+				
 macro PUSH_ALL_BP
 	push bp
 	mov bp, sp
@@ -107,23 +108,25 @@ playerY dw 5
 playerDirection db 0 ; Directions of movement: 0 - up, 1 - right, 2 - down, 3 - left
 oldPlayerDirection db 0 ; previous Direction of movement
 
-Level db 3
+Level db 1
 
 IsDrawingTrail db 0
+
+AreaCounter dw 0 ; Allows us to count the amount of area captured, to win the game 
 
 Enemy1X dw 20
 Enemy1Y dw 2
 Enemy1Direction db 0
 
-Enemy2X dw MAX_X+1
+Enemy2X dw MAX_X
 Enemy2Y dw MAX_Y
 Enemy2Direction db 0
 
-Enemy3X dw MAX_X+1
+Enemy3X dw MAX_X
 Enemy3Y dw MAX_Y
 Enemy3Direction db 0
 
-Enemy4X dw MAX_X+1
+Enemy4X dw MAX_X
 Enemy4Y dw MAX_Y
 Enemy4Direction db 0
 
@@ -159,7 +162,47 @@ start:
 	mov ax, 13h
 	int 10h	
 	
-	call StartMenu	
+	MainLoop:
+	call StartMenu ;Possible Outcome: play || help || exit
+
+	cmp [gameStatus], 0 ; playing currently
+	je Play
+	cmp [gameStatus], 4 ; pressed help
+	je Help
+	cmp [gameStatus], 5 ; pressed exit
+	je exit
+	
+	Play:
+	call playGame ;Possible Outcome: win || lose || start menu(back to menu)
+	
+	cmp [gameStatus], 1 ; player won
+	je Win
+	cmp [gameStatus], 2 ; player lost
+	je Lose
+	cmp [gameStatus], 3 ; leave to menu
+	je Continue
+	
+	Help:
+	; ++++++++++++++ TEMPORARY ++++++++++++++
+	mov [gameStatus], 0
+	jmp Continue
+	; -------------- TEMPORARY --------------
+	
+	Win:
+	; ++++++++++++++ TEMPORARY ++++++++++++++
+	mov [gameStatus], 0
+	jmp exit
+	; -------------- TEMPORARY --------------
+	
+	Lose:
+	; ++++++++++++++ TEMPORARY ++++++++++++++
+	mov [gameStatus], 0
+	jmp Continue
+	; -------------- TEMPORARY --------------
+	
+	Continue:
+	cmp [gameStatus], 5
+	jne MainLoop
 	
 exit:
 	mov ax, 4c00h
@@ -170,6 +213,7 @@ proc StartMenu
 	
 	PUSH_ALL
 	; SETUP FOR DRAWING MENU
+	; call EraseScreen
 	mov [BmpLeft], 0
 	mov [BmpTop], 0
 	mov [BmpColSize], 320
@@ -202,13 +246,21 @@ proc StartMenu
 	
 	@@EnterSelection:
 	cmp [menuSelection], 0
-	je @@StartGame
+	je @@PressPlay
 	
 	cmp [menuSelection], 2
-	je @@exit
+	je @@PressExit
 	
-	@@StartGame:
-	call PlayGame
+	@@PressPlay:
+	mov [gameStatus], 0
+	jmp @@exit
+	
+	@@PressHelp:
+	mov [gameStatus], 4
+	jmp @@exit
+	
+	@@PressExit:
+	mov [gameStatus], 5
 	jmp @@exit
 	
 	@@SelectionUp:
@@ -238,7 +290,6 @@ proc StartMenu
 		jmp @@InputLoop
 		
 		
-	
 	@@exit:
 	POP_ALL
 	ret
@@ -297,38 +348,14 @@ proc CoordinatesToVideo
 	ret 2
 endp
 
-proc PlayLevel1
-	call CreateEnemy1
-	mov [Level], 1
-	call PlayGame
-	ret
-endp
-
-proc PlayLevel2
-	call CreateEnemy2
-	mov [Level], 2
-	call PlayGame
-	ret
-endp
-
-proc PlayLevel3
-	call CreateEnemy3
-	mov [Level], 3
-	call PlayGame
-	ret
-endp
-
-proc PlayLevel4
-	call CreateEnemy4
-	mov [Level], 4
-	call PlayGame
-	ret
-endp
 
 ; Main Function and Loop of Game	
 proc PlayGame
 	; ------------ Initialization
 	call EraseScreen
+	call ClearGrid
+	mov [playerX], 5
+	mov [playerY], 5
 	push [playerX]
 	push [playerY]
 	call CreateWalls
@@ -340,6 +367,11 @@ proc PlayGame
 	push 1
 	call TimeBasedDelay ; Makes a delay for one milisecond
 	call ChangeDirection ; Takes input and changes direction accordingly
+	
+	cmp [gameStatus], 3 ; check player pressed ESC
+	jne @@enemyDelayCheck ; If didn't, continue as usual
+	jmp @@exit ; Else, Leave the game to the start menu
+	; (I did this in such weird way because of relative jump)
 	
 	; Makes the delay for updating and drawing the enemy
 	@@enemyDelayCheck:
@@ -358,6 +390,9 @@ proc PlayGame
 	call CheckLose ; After moving the enemies, Checks if they hit the player ot the trail. AL holds the result
 	cmp al, 1
 	je @@Mid_LoseGame
+	call CheckWin
+	cmp al, 1
+	je @@Mid_WinGame
 	
 	; Makes the delay for updating and drawing the player
 	@@playerDelayCheck:
@@ -368,11 +403,16 @@ proc PlayGame
 	cmp dx, 0
 	je @@playerMove ; If 100 Miliseconds haven't passed, keep counting
 	jmp @@cont2
+	
 	@@Mid_LoseGame:
 	jmp @@LoseGame ; did this to avoid 'Relative Jump Out of Range'
+	
+	@@Mid_WinGame:
+	jmp @@WinGame
+	
 	@@playerMove:
-	call AddTrail
-	cmp ax, 1 ; Checks if we captured new area
+	call AddTrail ; Adds new trail pieces, Tells us if we have to capture area
+	cmp ax, 1 ; Checks if we have to capture new area
 	jne @@cont1
 	call AddArea
 	@@cont1:
@@ -404,25 +444,27 @@ proc PlayGame
 	mov [oldPlayerDirection], bl
 	
 	@@cont2:
-	cmp [isExit], 1
-	je @@exitGame
 	jmp @@InputLoop
 	
-	@@LoseGame:
+	@@WinGame:
 	mov [gameStatus], 1
-	mov [isExit], 1
-	@@exitGame:
+	jmp @@exit
+	
+	@@LoseGame:
+	mov [gameStatus], 2
+	
+	@@exit:
 	ret
 endp
 
 
 proc DrawWalls
 	PUSH_ALL
-	mov cx, MAX_X
+	mov cx, MAX_X+1
 	mov di, 0
 	@@outer_loop:
 	push cx
-	mov cx, MAX_Y
+	mov cx, MAX_Y+1
 	mov si, 0
 	@@inner_loop:
 	push di
@@ -454,15 +496,15 @@ proc DrawWalls
 	ret
 endp
 
-; DESCRIPTION: Redraws all of the elements on the screen 
+; DESCRIPTION: Draws black screen
 ; We will use this command after capturing new area to update the captured area on the screen
 proc EraseScreen
 	PUSH_ALL
-	mov cx, MAX_X
+	mov cx, MAX_X+1
 	mov di, 0
 	@@outer_loop:
 	push cx
-	mov cx, MAX_Y
+	mov cx, MAX_Y+1
 	mov si, 0
 	@@inner_loop:
 	push di
@@ -479,6 +521,30 @@ proc EraseScreen
 	ret 
 endp
 
+; DESCRIPTION: Clears all the cells on the grid (sets value to 0)
+proc ClearGrid
+	PUSH_ALL
+	mov cx, MAX_X+1
+	mov di, 0
+	@@outer_loop:
+	push cx
+	mov cx, MAX_Y+1
+	mov si, 0
+	@@inner_loop:
+	push di
+	push si
+	call CoordinatesToGrid
+	pop bx
+	mov [bx], 0
+	@@cont:
+	inc si
+	loop @@inner_loop
+	pop cx
+	inc di
+	loop @@outer_loop
+	POP_ALL
+	ret 
+endp
 proc CreateWalls
 	PUSH_ALL_BP
 	mov cx, 3
@@ -498,6 +564,7 @@ proc CreateWalls
 	pop bx
 	mov al, WALL_BIT
 	call EnableBit
+	inc [AreaCounter]
 	inc si
 	loop @@inner_loop
 	pop cx
@@ -561,7 +628,7 @@ proc ChangeDirection
 	cmp ah, 50h ; Down Arrow
 	je @@down
 	cmp ah, 01 ; ESC
-	je @@stop_game ; If pressed ESC - stop the game
+	je @@stop_play ; If pressed ESC - stop playing and go to start menu
 	jmp @@exit
 	
 	@@left:
@@ -588,8 +655,8 @@ proc ChangeDirection
 	mov [playerDirection], 2
 	jmp @@exit
 	
-	@@stop_game:
-	mov [isExit], 1
+	@@stop_play:
+	mov [gameStatus], 3
 	jmp @@exit
 	
 	@@exit:
@@ -683,6 +750,9 @@ proc CheckLose
 	cmp al, 1
 	je @@exit_func
 	
+	cmp [Level],1
+	jle @@exit_func
+	
 	push [Enemy2X]
 	push [Enemy2Y]
 	call CoordinatesToGrid 
@@ -693,6 +763,9 @@ proc CheckLose
 	cmp al, 1
 	je @@exit_func
 	
+	cmp [Level],2
+	jle @@exit_func
+	
 	push [Enemy3X]
 	push [Enemy3Y]
 	call CoordinatesToGrid 
@@ -701,11 +774,45 @@ proc CheckLose
 	call CheckBit ; Checks if either the player or the trail is on the enemy cell
 	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
 	
+	cmp [Level],3
+	jle @@exit_func
+	
+	push [Enemy4X]
+	push [Enemy4Y]
+	call CoordinatesToGrid 
+	pop bx ; BX => Cell of Enemy4 on the grid
+	mov al, PLAYER_BIT + TRAIL_BIT 
+	call CheckBit ; Checks if either the player or the trail is on the enemy cell
+	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
+	
 	@@exit_func:
 	ret
 endp CheckLose
 
+; DESCRIPTION: Checks if the player has won by calculating the precentage of area he captured out of the screen, player wins when he captures at least 75%
+; HOW IT WORKS:
+; 1) We calculate what is 1% of the screen using the formula (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)/100
+; 2) We divide the amount of area(cells) we captured by the 1% we got in step 1)
+; 3) We compare the result to 75, if higher or equal - the player won
+; OUTPUT: AL - Boolean(1-Win, 0-Not Win)
+proc CheckWin
+	xor dx, dx
+	mov bx, (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)/100 ; Step 1)
+	mov ax, [AreaCounter]
+	div bx ; Step 2)
+	cmp ax, WIN_PRECENTAGE
+	jl @@NotWin
 	
+	@@Win:
+	mov al, 1
+	jmp @@exit_func
+	
+	@@NotWin:
+	mov al, 0
+	
+	@@exit_func:
+	ret
+endp CheckWin
 
 ; DESCRIPTION: Add new "Walls"/Area to the part surrounded by the trail
 ; How it works:
@@ -727,6 +834,7 @@ proc AddArea
 	call DisableBit
 	mov al, WALL_BIT
 	call EnableBit
+	inc [AreaCounter]
 	@@cont1:
 	inc di
 	loop @@FindTrails
@@ -761,6 +869,7 @@ proc AddArea
 	je @@ClearMark
 	
 	@@SetWall:
+	inc [AreaCounter]
 	mov al, WALL_BIT
 	call EnableBit
 	push di
@@ -1049,11 +1158,11 @@ proc DrawTrail
 	jmp @@exit_func
 		
 	@@Horizontal:
-			push [bp+6]
-			push [bp+4]
-			push offset trail_hor_matrix
-			call DrawMatrix
-			jmp @@exit_func	
+		push [bp+6]
+		push [bp+4]
+		push offset trail_hor_matrix
+		call DrawMatrix
+		jmp @@exit_func	
 			
 	@@Vertical:
 		push [bp+6]
