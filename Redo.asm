@@ -32,13 +32,13 @@ PLAYER_LENGTH = 5
 PLAYER_SPEED = 1
 ENEMY_SPEED = 1
 MOVE_DELAY = 100
-ENEMY_MOVE_DELAY = 100	
+ENEMY_MOVE_DELAY = 100
 MIN_X = 0
 MIN_Y = 0
 MAX_X = 320/PLAYER_LENGTH-1
 MAX_Y = 200/PLAYER_LENGTH-1
 MENU_BUTTON_X=137
-WIN_PRECENTAGE=15
+WIN_PRECENTAGE=75
 				
 macro PUSH_ALL_BP
 	push bp
@@ -143,7 +143,9 @@ OneBmpLine 	db 200 dup (0)  ; One Color line read buffer
    
 ScrLine 	db 320 dup (0)  ; One Color line read buffer
 
-MenuFileName db "menu0.bmp",0
+StartMenuFileName db "menu0.bmp",0
+WinScreenFileName db "WinScree.bmp", 0
+HelpScreenFileName db "helpMenu.bmp", 0
 FileHandle	dw ?
 Header 	    db 54 dup(0)
 BmpFileErrorMsg    	db 'Error At Opening Bmp File ','start.bmp', 0dh, 0ah,'$'
@@ -184,15 +186,16 @@ start:
 	
 	Help:
 	; ++++++++++++++ TEMPORARY ++++++++++++++
-	mov [gameStatus], 0
+	mov [gameStatus], 3
+	call HelpScreen
 	jmp Continue
 	; -------------- TEMPORARY --------------
 	
 	Win:
-	; ++++++++++++++ TEMPORARY ++++++++++++++
-	mov [gameStatus], 0
-	jmp exit
-	; -------------- TEMPORARY --------------
+	mov [gameStatus], 3
+	inc [Level]
+	call WinScreen
+	jmp Continue
 	
 	Lose:
 	; ++++++++++++++ TEMPORARY ++++++++++++++
@@ -210,15 +213,21 @@ exit:
 
 ; DESCRIPTION: Draws all the Start Menu buttons
 proc StartMenu
-	
 	PUSH_ALL
+	mov [menuSelection], 0
 	; SETUP FOR DRAWING MENU
-	; call EraseScreen
+	call EraseScreen
 	mov [BmpLeft], 0
 	mov [BmpTop], 0
 	mov [BmpColSize], 320
 	mov [BmpRowSize], 200
-	mov dx, offset MenuFileName
+	mov dx, offset StartMenuFileName
+	mov al, [menuSelection]
+	add al, 30h
+	mov bx, offset StartMenuFileName
+	add bx, 4
+	mov [bx], al
+	
 	call OpenShowBmp
 	; LOOP FOR TAKING INPUT
 	@@InputLoop:
@@ -248,6 +257,9 @@ proc StartMenu
 	cmp [menuSelection], 0
 	je @@PressPlay
 	
+	cmp [menuSelection], 1
+	je @@PressHelp
+	
 	cmp [menuSelection], 2
 	je @@PressExit
 	
@@ -269,10 +281,10 @@ proc StartMenu
 		dec [menuSelection]
 		mov al, [menuSelection]
 		add al, 30h
-		mov bx, offset MenuFileName
+		mov bx, offset StartMenuFileName
 		add bx, 4
 		mov [bx], al
-		mov dx, offset MenuFileName
+		mov dx, offset StartMenuFileName
 		call OpenShowBmp
 		jmp @@InputLoop
 	
@@ -282,10 +294,10 @@ proc StartMenu
 		inc [menuSelection]
 		mov al, [menuSelection]
 		add al, 30h
-		mov bx, offset MenuFileName
+		mov bx, offset StartMenuFileName
 		add bx, 4
 		mov [bx], al
-		mov dx, offset MenuFileName
+		mov dx, offset StartMenuFileName
 		call OpenShowBmp
 		jmp @@InputLoop
 		
@@ -294,6 +306,52 @@ proc StartMenu
 	POP_ALL
 	ret
 endp
+
+proc WinScreen
+	PUSH_ALL
+	; SETUP FOR DRAWING MENU
+	call EraseScreen
+	mov [BmpLeft], 0
+	mov [BmpTop], 0
+	mov [BmpColSize], 320
+	mov [BmpRowSize], 200
+	mov dx, offset WinScreenFileName
+	call OpenShowBmp
+	; LOOP FOR TAKING INPUT
+	@@InputLoop:
+	
+	mov ah, 1
+	int 16h
+	jz @@InputLoop
+	mov ah, 0
+	int 16h
+	@@exit:
+	POP_ALL
+	ret
+endp WinScreen
+
+proc HelpScreen
+	PUSH_ALL
+	; SETUP FOR DRAWING MENU
+	call EraseScreen
+	mov [BmpLeft], 0
+	mov [BmpTop], 0
+	mov [BmpColSize], 320
+	mov [BmpRowSize], 200
+	mov dx, offset HelpScreenFileName
+	call OpenShowBmp
+	; LOOP FOR TAKING INPUT
+	@@InputLoop:
+	
+	mov ah, 1
+	int 16h
+	jz @@InputLoop
+	mov ah, 0
+	int 16h
+	@@exit:
+	POP_ALL
+	ret
+endp HelpScreen
 
 ; in dx how many cols (horizontal)
 ; in cx how many rows (vertical)
@@ -354,6 +412,7 @@ proc PlayGame
 	; ------------ Initialization
 	call EraseScreen
 	call ClearGrid
+	mov [AreaCounter], 0
 	mov [playerX], 5
 	mov [playerY], 5
 	push [playerX]
@@ -390,9 +449,7 @@ proc PlayGame
 	call CheckLose ; After moving the enemies, Checks if they hit the player ot the trail. AL holds the result
 	cmp al, 1
 	je @@Mid_LoseGame
-	call CheckWin
-	cmp al, 1
-	je @@Mid_WinGame
+	
 	
 	; Makes the delay for updating and drawing the player
 	@@playerDelayCheck:
@@ -415,6 +472,9 @@ proc PlayGame
 	cmp ax, 1 ; Checks if we have to capture new area
 	jne @@cont1
 	call AddArea
+	call CheckWin
+	cmp al, 1
+	je @@Mid_WinGame
 	@@cont1:
 	push [playerX]
 	push [playerY]
@@ -822,6 +882,7 @@ endp CheckWin
 ; 4) Disables the outside bit for all the cells on the grid(allowing us to use the same method the next time we capture an area)
 proc AddArea
 	PUSH_ALL
+	mov [AreaCounter], 0
 	mov cx, (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)
 	mov di, 0
 	@@FindTrails:
@@ -851,6 +912,33 @@ proc AddArea
 	push MIN_X
 	push MAX_Y
 	call MarkOuterBit
+	
+	mov cx, MAX_X+1
+	mov di, 0
+	@@outer_loop2:
+	push cx
+	mov cx, MAX_Y+1
+	mov si, 0
+	@@inner_loop2:
+	push di ; X
+	push MIN_Y ; Y
+	call MarkOuterBit
+	push di ; X
+	push MAX_Y ; Y
+	call MarkOuterBit
+	push MAX_X
+	push si
+	call MarkOuterBit
+	push MIN_X
+	push si
+	call MarkOuterBit
+	
+	inc si
+	loop @@inner_loop2
+	pop cx
+	inc di
+	loop @@outer_loop2
+	
 	
 	mov cx, MAX_X+1
 	mov di, 0
