@@ -36,9 +36,9 @@ ENEMY_MOVE_DELAY = 100
 MIN_X = 0
 MIN_Y = 0
 MAX_X = 320/PLAYER_LENGTH-1
-MAX_Y = 200/PLAYER_LENGTH-1
+MAX_Y = 180/PLAYER_LENGTH-1
 MENU_BUTTON_X=137
-WIN_PRECENTAGE=75
+WIN_PRECENTAGE=10
 				
 macro PUSH_ALL_BP
 	push bp
@@ -114,6 +114,7 @@ IsDrawingTrail db 0
 
 AreaCounter dw 0 ; Allows us to count the amount of area captured, to win the game 
 
+EnemyMoveDelay db 100
 Enemy1X dw 20
 Enemy1Y dw 2
 Enemy1Direction db 0
@@ -130,12 +131,12 @@ Enemy4X dw MAX_X
 Enemy4Y dw MAX_Y
 Enemy4Direction db 0
 
-gameStatus db 0 ; 0 - Still playing, 1 - Lost, 2 - Won
+gameStatus db 0 ; 0 - Still playing, 1 - Won, 2 - Lost, 3 - Leave to menu, 4 - Help, 5 - Exit
 isExit db 0
 RndCurrentPos dw 0
 timer dw 0
 second_counter dw 0
-
+capturedPrecentage dw 0 
 menuSelection db 0
 
 ;BMP File data
@@ -145,6 +146,7 @@ ScrLine 	db 320 dup (0)  ; One Color line read buffer
 
 StartMenuFileName db "menu0.bmp",0
 WinScreenFileName db "WinScree.bmp", 0
+LoseScreenFileName db "lose.bmp", 0
 HelpScreenFileName db "helpMenu.bmp", 0
 FileHandle	dw ?
 Header 	    db 54 dup(0)
@@ -193,13 +195,25 @@ start:
 	
 	Win:
 	mov [gameStatus], 3
+	cmp [Level], 4
+	jne IncreaseLevel
+	
+	IncreaseDifficulty:
+	sub [EnemyMoveDelay], 25
+	mov [Level], 1
+	jmp cont
+	
+	IncreaseLevel:
 	inc [Level]
+	
+	cont:
 	call WinScreen
 	jmp Continue
 	
 	Lose:
 	; ++++++++++++++ TEMPORARY ++++++++++++++
-	mov [gameStatus], 0
+	mov [gameStatus], 3
+	call LoseScreen
 	jmp Continue
 	; -------------- TEMPORARY --------------
 	
@@ -330,6 +344,29 @@ proc WinScreen
 	ret
 endp WinScreen
 
+proc LoseScreen
+	PUSH_ALL
+	; SETUP FOR DRAWING MENU
+	call EraseScreen
+	mov [BmpLeft], 0
+	mov [BmpTop], 0
+	mov [BmpColSize], 320
+	mov [BmpRowSize], 200
+	mov dx, offset LoseScreenFileName
+	call OpenShowBmp
+	; LOOP FOR TAKING INPUT
+	@@InputLoop:
+	
+	mov ah, 1
+	int 16h
+	jz @@InputLoop
+	mov ah, 0
+	int 16h
+	@@exit:
+	POP_ALL
+	ret
+endp LoseScreen
+
 proc HelpScreen
 	PUSH_ALL
 	; SETUP FOR DRAWING MENU
@@ -420,6 +457,8 @@ proc PlayGame
 	call CreateWalls
 	call DrawWalls
 	call CreateEnemies
+	call CalculatePrecent
+	call PrintPrecent
 	; ------------- End of Initialization
 	
 	@@InputLoop:
@@ -435,7 +474,8 @@ proc PlayGame
 	; Makes the delay for updating and drawing the enemy
 	@@enemyDelayCheck:
 	mov ax, [timer] 
-	mov bx, ENEMY_MOVE_DELAY
+	xor bx, bx
+	mov bl, [EnemyMoveDelay]
 	xor dx, dx
 	div bx
 	cmp dx, 0
@@ -472,6 +512,8 @@ proc PlayGame
 	cmp ax, 1 ; Checks if we have to capture new area
 	jne @@cont1
 	call AddArea
+	call CalculatePrecent
+	call PrintPrecent
 	call CheckWin
 	cmp al, 1
 	je @@Mid_WinGame
@@ -560,11 +602,11 @@ endp
 ; We will use this command after capturing new area to update the captured area on the screen
 proc EraseScreen
 	PUSH_ALL
-	mov cx, MAX_X+1
+	mov cx, 320/PLAYER_LENGTH
 	mov di, 0
 	@@outer_loop:
 	push cx
-	mov cx, MAX_Y+1
+	mov cx, 200/PLAYER_LENGTH
 	mov si, 0
 	@@inner_loop:
 	push di
@@ -584,11 +626,11 @@ endp
 ; DESCRIPTION: Clears all the cells on the grid (sets value to 0)
 proc ClearGrid
 	PUSH_ALL
-	mov cx, MAX_X+1
+	mov cx, 320/PLAYER_LENGTH
 	mov di, 0
 	@@outer_loop:
 	push cx
-	mov cx, MAX_Y+1
+	mov cx, 200/PLAYER_LENGTH
 	mov si, 0
 	@@inner_loop:
 	push di
@@ -833,6 +875,8 @@ proc CheckLose
 	mov al, PLAYER_BIT + TRAIL_BIT 
 	call CheckBit ; Checks if either the player or the trail is on the enemy cell
 	; AL => Is any of the bits enabled(1-Enabled,0-Disabled)
+	cmp al, 1
+	je @@exit_func
 	
 	cmp [Level],3
 	jle @@exit_func
@@ -856,11 +900,7 @@ endp CheckLose
 ; 3) We compare the result to 75, if higher or equal - the player won
 ; OUTPUT: AL - Boolean(1-Win, 0-Not Win)
 proc CheckWin
-	xor dx, dx
-	mov bx, (320/PLAYER_LENGTH)*(200/PLAYER_LENGTH)/100 ; Step 1)
-	mov ax, [AreaCounter]
-	div bx ; Step 2)
-	cmp ax, WIN_PRECENTAGE
+	cmp [capturedPrecentage], WIN_PRECENTAGE
 	jl @@NotWin
 	
 	@@Win:
@@ -874,6 +914,32 @@ proc CheckWin
 	ret
 endp CheckWin
 
+; DESCRIPTION: Calculates the precentage of the screen that the player captured, and returns the value to the variable 'capturedPrecentage'
+proc CalculatePrecent
+	xor dx, dx
+	mov bx, (MAX_X+1)*(MAX_Y+1)/100 ; Step 1)
+	mov ax, [AreaCounter]
+	div bx ; Step 2)
+	mov [capturedPrecentage], ax
+	ret
+endp CalculatePrecent
+
+; DESCRIPTION: Prints the precentage of the screen that the player captured
+proc PrintPrecent
+	xor ax, ax
+	xor bx, bx
+	xor dx, dx
+	mov ah, 2h
+	mov bh, 0
+	mov dh, 23
+	mov dl, 0
+	int 10h
+	
+	push [capturedPrecentage]
+	push 25
+	call PrintNumWithColor
+	ret
+endp
 ; DESCRIPTION: Add new "Walls"/Area to the part surrounded by the trail
 ; How it works:
 ; 1) Replaces all trail pieces with wall pieces(disables trail bit, enables wall bit)
@@ -1111,6 +1177,14 @@ proc PlayerCoordsToGrid
 	ret
 endp
 
+; Description: Function to update the player's location according to the PlayerDirection
+; How it works:
+;	  1) Check if the player is allowed to move towards his current direction(PlayerDirection)
+;	  2) Removes the player from the old location(Disables the player bit in the old Cell)
+;	  3) Updates player's X,Y coordinates according to his Direction
+;	  4) Places the player on the new location according to his coordinates(Enables the player bit in the new needed Cell on the grid)
+; INPUT: ds - playerDirection, playerX, playerY
+; OUTPUT: ds - playerX, playerY, Grid
 proc UpdatePlayer
 	PUSH_ALL
 	call PlayerCheckLegalMove ; Checks if it is legal to move the player, boolean result in AX
@@ -1119,8 +1193,9 @@ proc UpdatePlayer
 	
 	call PlayerCoordsToGrid 
 	mov al, PLAYER_BIT 
-	call DisableBit
+	call DisableBit ; Disables the player bit on the old cellw
 	
+	; Updates the PlayerX and PlayerY according to direction
 	cmp [playerDirection], 0
 	je @@up
 	cmp [playerDirection], 1
@@ -1145,6 +1220,7 @@ proc UpdatePlayer
 	@@left:
 	sub [playerX], PLAYER_SPEED
 	
+	; Enables the Player bit on the new cell
 	@@AddPlayerToGrid:
 	call PlayerCoordsToGrid 
 	mov al, PLAYER_BIT 
@@ -1368,6 +1444,7 @@ proc PrintNum
     jne @@myLoop ; If we didn't - keep on going, if we did - Print
     
     @@Print:
+
     mov ah, 02h
     xor dx, dx 
     pop dx ; Get the last digit we pushed (most left digit)
@@ -1381,7 +1458,7 @@ proc PrintNum
     pop ax
     pop bp
     ret 2
-endp PrintNum
+endp  
 
 proc PrintNumWithColor
 	PUSH_ALL_BP
@@ -1550,7 +1627,7 @@ endp
 
 ; DESCRIPTION: Fills up the cell in which the player used to be
 			 ; according to bits that are enabled in the cell
-; INPUT: None
+; INPUT: (X, Y) -> Through stack
 ; OUTPUT: Draws cell to the screen
 proc RefreshCell
 	PUSH_ALL_BP
@@ -1561,8 +1638,8 @@ proc RefreshCell
 	cmp ax, 1
 	je @@draw_wall
 	
-	push [playerX]
-	push [playerY]
+	push [bp+6]
+	push [bp+4]
 	call CheckTrailBit
 	pop ax
 	cmp ax, 1
@@ -1907,7 +1984,7 @@ proc GenerateEnemyLocation
 	
 	; Generate X
 	mov bl, 0
-	mov bh, 320/PLAYER_LENGTH-1
+	mov bh, MAX_X
 	call RandomByCS
 	xor ah, ah
 	mov bx, EnemyX
@@ -1915,7 +1992,7 @@ proc GenerateEnemyLocation
 	
 	; Generate Y
 	mov bl, 0
-	mov bh, 200/PLAYER_LENGTH-1
+	mov bh, MAX_Y
 	call RandomByCS
 	xor ah, ah
 	mov bx, EnemyY
